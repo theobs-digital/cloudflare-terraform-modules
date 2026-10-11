@@ -9,7 +9,7 @@ keeps its attribute names, so whoever knows the provider knows the module.
 
 | Module | Manages | Latest release |
 |---|---|---|
-| [`cloudflare-dns`](cloudflare-dns) | A DNS zone: the zone, its records, its DNS settings and DNSSEC | not released yet |
+| [`cloudflare-dns`](cloudflare-dns) | A DNS zone: the zone, its records, its DNS settings and DNSSEC | [`cloudflare-dns/v1.0.0`](cloudflare-dns/CHANGELOG.md) |
 
 ## Usage
 

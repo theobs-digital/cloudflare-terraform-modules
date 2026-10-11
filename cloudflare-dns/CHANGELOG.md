@@ -8,6 +8,8 @@ Releases are tagged `cloudflare-dns/vX.Y.Z`.
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-10-11
+
 ### Added
 
 - Requirements: Terraform >= 1.3 and provider `cloudflare/cloudflare` ~> 5.27
@@ -19,4 +21,5 @@ Releases are tagged `cloudflare-dns/vX.Y.Z`.
 - DNSSEC with `dnssec`, and the `dnssec` output with the DS and DNSKEY fields to give the registrar
 - Examples `basic`, `complete` and `import`
 
-[Unreleased]: https://github.com/theobs-digital/cloudflare-terraform-modules/commits/main/cloudflare-dns
+[Unreleased]: https://github.com/theobs-digital/cloudflare-terraform-modules/compare/cloudflare-dns/v1.0.0...main
+[1.0.0]: https://github.com/theobs-digital/cloudflare-terraform-modules/releases/tag/cloudflare-dns/v1.0.0
