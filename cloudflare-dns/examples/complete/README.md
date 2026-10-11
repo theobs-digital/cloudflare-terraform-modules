@@ -2,7 +2,9 @@
 
 Sets every input of the module: the zone with its type, pause and custom name
 servers, records with `content` and with `data` and their optional
-attributes, the DNS settings and DNSSEC.
+attributes, the DNS settings and DNSSEC. The DNS settings leave `soa` out,
+since only Enterprise zones accept it, see
+[DNS settings](../../README.md#dns-settings).
 
 Some of these need a paid plan, and the apply fails without one:
 

@@ -14,6 +14,8 @@ run "settings_left_alone" {
   }
 }
 
+# Every attribute, as on an Enterprise zone: other plans refuse soa, but the
+# mock does not check plans.
 run "settings" {
   variables {
     dns_settings = {

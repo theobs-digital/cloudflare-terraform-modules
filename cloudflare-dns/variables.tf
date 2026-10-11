@@ -93,7 +93,7 @@ variable "records" {
 }
 
 variable "dns_settings" {
-  description = "DNS settings of the zone, with the attributes of `cloudflare_zone_dns_settings` under the same names, except the deprecated `foundation_dns`. When `null`, the module leaves them alone. Write every setting: one left out shows as a change to `null` at each plan. Removing this argument resets nothing, see [DNS settings](#dns-settings)."
+  description = "DNS settings of the zone, with the attributes of `cloudflare_zone_dns_settings` under the same names, except the deprecated `foundation_dns`. When `null`, the module leaves them alone. Write `flatten_all_cnames`, `multi_provider`, `ns_ttl`, `secondary_overrides` and `zone_mode`: one left out shows as a change to `null` at each plan. `soa` is only accepted on Enterprise zones: elsewhere the API refuses it, even unchanged (error 1003). Leave it out, and the plan shows no change: the provider reads it back from Cloudflare. Removing this argument resets nothing, see [DNS settings](#dns-settings)."
   type = object({
     flatten_all_cnames = optional(bool)
     internal_dns = optional(object({

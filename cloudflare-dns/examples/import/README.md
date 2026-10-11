@@ -61,7 +61,9 @@ An entry stands for the existing record with the same type and name, and:
 
 Write the values as the API returns them, which is how `cf-terraforming`
 writes them: a TXT `content` with its quotes, a NAPTR `replacement` with its
-final dot. `ttl`, `proxied` and the other attributes do not count, so a
+final dot, an SSHFP `fingerprint` in upper case. Write an SRV `priority` at
+the top level as well as in `data`: the record still imports without it, but
+each plan then sets it to `null`, see [Records](../../README.md#records). `ttl`, `proxied` and the other attributes do not count, so a
 difference there shows as a change, not as a record to add.
 
 The data source reads the records one type at a time: read together, a record

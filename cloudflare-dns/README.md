@@ -4,11 +4,11 @@ Terraform module that manages a Cloudflare DNS zone: the zone itself, its
 records, its DNS settings and DNSSEC, on top of the `cloudflare/cloudflare`
 provider. Every provider attribute of these resources is available under the
 same name, and each one is optional: whatever the caller leaves out keeps
-Cloudflare's default. DNS settings are the exception: once you manage them,
-write them all, see [DNS settings](#dns-settings).
+Cloudflare's default. DNS settings are the exception, see
+[DNS settings](#dns-settings).
 
-The module is not released yet. The first release will be tagged
-`cloudflare-dns/v1.0.0`, see the [CHANGELOG](CHANGELOG.md).
+Releases are tagged `cloudflare-dns/vX.Y.Z` and listed in the
+[CHANGELOG](CHANGELOG.md).
 
 ## Usage
 
@@ -31,13 +31,6 @@ module "dns" {
 When the zone already exists and another configuration manages it, set
 `create_zone = false`: the module looks the zone up by name in the account and
 manages only what lives in it.
-
-Each record takes the attributes of
-[`cloudflare_dns_record`](https://registry.terraform.io/providers/cloudflare/cloudflare/latest/docs/resources/dns_record),
-and its key in `records` names it in the state. Renaming a key destroys the
-record and creates it again: to rename one without touching DNS, add a `moved`
-block from `module.dns.cloudflare_dns_record.this["old"]` to
-`module.dns.cloudflare_dns_record.this["new"]`.
 
 See the [repository README](../README.md#usage) for the SSH form of the
 source and the versioning rules.
@@ -67,14 +60,116 @@ exist yet when the token is issued:
 | Zone → Zone → Edit | create, update and delete the zone |
 | Zone → DNS → Edit | records, DNSSEC and DNS settings of the zone |
 
+## Records
+
+Each entry of `records` takes the attributes of
+[`cloudflare_dns_record`](https://registry.terraform.io/providers/cloudflare/cloudflare/latest/docs/resources/dns_record).
+Set `content` for A, AAAA, CNAME, MX, NS, OPENPGPKEY, PTR and TXT records, and
+`data` for the other types. `name` can be `@`, a name relative to the zone
+such as `www`, or the fully qualified name: the provider matches it with the
+fully qualified name Cloudflare returns, and the plan shows no change.
+
+Cloudflare rewrites a few values. Write them the way it stores them, or each
+plan shows the difference again:
+
+| Record | Write |
+|---|---|
+| SRV | `priority` at the top level, as well as `data.priority`: Cloudflare returns it there, and without it each plan sets it to `null` |
+| NAPTR | `data.replacement` with its final dot |
+| SSHFP | `data.fingerprint` in upper case |
+
+MX and URI records take `priority` at the top level only. Cloudflare keeps
+the other values as written, such as a TXT `content` with or without quotes,
+an SRV `target` without a final dot, the `value` of an HTTPS record or the
+`certificate` of a TLSA record.
+
+A proxied record keeps `ttl` at its default, `1` (automatic): the provider
+refuses `proxied = true` with any other TTL, at apply and not at plan.
+
+Record `tags` and `settings.flatten_cname` need a paid plan, see the
+[complete example](examples/complete).
+
+### Rename a key
+
+The key of an entry in `records` only names the record in the state. Renaming
+a key destroys the record and creates it again: Terraform deletes the old one
+and creates the new one at the same time. To rename a key without touching
+DNS, declare the move:
+
+```hcl
+moved {
+  from = module.dns.cloudflare_dns_record.this["old"]
+  to   = module.dns.cloudflare_dns_record.this["new"]
+}
+```
+
+## Zone
+
+### Delete or replace the zone
+
+Destroying the module deletes the zone, and Cloudflare deletes all its records
+with it, including the ones Terraform does not manage. Changing `name` or
+`account_id` does the same, since it replaces the zone. Before applying, look
+for `module.dns.cloudflare_zone.this[0]` in the plan.
+
+Setting `create_zone = false` on a zone the module created destroys it as
+well: the plan shows `module.dns.cloudflare_zone.this[0] will be destroyed`.
+To hand the zone over to another configuration, forget it first, see below.
+
+### Stop managing without deleting
+
+To drop the whole module from Terraform and keep the zone and its records,
+remove the `module` block and declare its removal, with Terraform 1.7 or
+later:
+
+```hcl
+removed {
+  from = module.dns
+
+  lifecycle {
+    destroy = false
+  }
+}
+```
+
+The plan then shows each object as "will no longer be managed by Terraform,
+but will not be destroyed". Before Terraform 1.7, run
+`terraform state rm module.dns` instead.
+
+A `removed` block cannot target a resource the module still declares, nor one
+key of `records`. Use `terraform state rm` for these:
+
+- To keep the records here while another configuration takes the zone over,
+  forget the zone, then set `create_zone = false`. The module looks the zone
+  up by name, and the plan shows no change:
+
+  ```bash
+  terraform state rm 'module.dns.cloudflare_zone.this[0]'
+  ```
+
+- To leave one record alone, forget it, then remove its entry from `records`:
+
+  ```bash
+  terraform state rm 'module.dns.cloudflare_dns_record.this["www"]'
+  ```
+
 ## DNS settings
 
-The provider reads every DNS setting back from Cloudflare, so a setting left
-out of `dns_settings`, or a field left out of `soa`, shows as a change to
-`null` at each plan. Write them all. Cloudflare reported these values on
-11 October 2026 for a zone on the Free plan, and the SOA timers and `ns_ttl`
-are the defaults it documents for new zones; Enterprise accounts can set
-their own. On such a zone, this block plans no change:
+The provider reads every DNS setting back from Cloudflare. A simple setting
+left out of `dns_settings`, that is `flatten_all_cnames`, `multi_provider`,
+`ns_ttl`, `secondary_overrides` or `zone_mode`, shows as a change to `null` at
+each plan: write them all. `soa`, `nameservers` and `internal_dns` can be left
+out whole, and the plan shows no change, since the provider keeps what
+Cloudflare returns. A `soa` you write needs every field, though: a field left
+out shows as a change to `null`.
+
+Only Enterprise zones accept `soa`. On other plans, Cloudflare refuses any
+`soa`, even its current values, with `Custom SOA records are not available to
+this account or zone` (error 1003), and the apply fails without changing
+anything. Leave `soa` out there.
+
+Cloudflare reported these values on 11 October 2026 for a zone on the Free
+plan, and this block, applied to that zone, then planned no change:
 
 ```hcl
   dns_settings = {
@@ -83,6 +178,15 @@ their own. On such a zone, this block plans no change:
     nameservers         = { type = "cloudflare.standard" }
     ns_ttl              = 86400
     secondary_overrides = false
+    zone_mode           = "standard"
+  }
+```
+
+On an Enterprise zone, add `soa`. The timers below, like `ns_ttl` above, are
+the defaults Cloudflare documents for new zones. `soa.mname` stays out:
+Cloudflare then picks the primary name server itself and returns `null`.
+
+```hcl
     soa = {
       expire  = 604800
       min_ttl = 1800
@@ -91,12 +195,7 @@ their own. On such a zone, this block plans no change:
       rname   = "dns.cloudflare.com"
       ttl     = 3600
     }
-    zone_mode = "standard"
-  }
 ```
-
-`soa.mname` stays out: Cloudflare then picks the primary name server itself
-and returns `null`.
 
 The deprecated `foundation_dns` is not part of the module: turn Advanced
 Nameservers on with `nameservers = { type = "cloudflare.advanced" }`. The API
@@ -108,7 +207,9 @@ deprecated; the warning is harmless.
 The DNS settings cannot be deleted, and the provider cannot import them. The
 first apply writes them over the current ones, and removing `dns_settings`
 only drops them from the state: the zone keeps the last values applied. To go
-back to a default, write it.
+back to a default, write it. A plan that creates them warns about "Resource
+Destruction Considerations": the provider states the same limit, and the
+warning is harmless.
 
 ## DNSSEC
 
@@ -193,7 +294,7 @@ the caches. Go through the registrar first:
 | <a name="input_account_id"></a> [account\_id](#input\_account\_id) | ID of the Cloudflare account that owns the zone. | `string` | n/a | yes |
 | <a name="input_name"></a> [name](#input\_name) | Domain name of the zone, such as `example.com`. Changing it replaces the zone. | `string` | n/a | yes |
 | <a name="input_create_zone"></a> [create\_zone](#input\_create\_zone) | Whether the module creates the zone. Set it to `false` when the zone already exists and another configuration manages it: the module then looks the zone up by `name` in the account, manages only its records, DNS settings and DNSSEC, and ignores `type`, `paused` and `vanity_name_servers`. | `bool` | `true` | no |
-| <a name="input_dns_settings"></a> [dns\_settings](#input\_dns\_settings) | DNS settings of the zone, with the attributes of `cloudflare_zone_dns_settings` under the same names, except the deprecated `foundation_dns`. When `null`, the module leaves them alone. Write every setting: one left out shows as a change to `null` at each plan. Removing this argument resets nothing, see [DNS settings](#dns-settings). | <pre>object({<br/>    flatten_all_cnames = optional(bool)<br/>    internal_dns = optional(object({<br/>      reference_zone_id = optional(string)<br/>    }))<br/>    multi_provider = optional(bool)<br/>    nameservers = optional(object({<br/>      type              = string<br/>      nameserver_set_id = optional(string)<br/>      ns_set            = optional(number)<br/>    }))<br/>    ns_ttl              = optional(number)<br/>    secondary_overrides = optional(bool)<br/>    soa = optional(object({<br/>      expire  = optional(number)<br/>      min_ttl = optional(number)<br/>      mname   = optional(string)<br/>      refresh = optional(number)<br/>      retry   = optional(number)<br/>      rname   = optional(string)<br/>      ttl     = optional(number)<br/>    }))<br/>    zone_mode = optional(string)<br/>  })</pre> | `null` | no |
+| <a name="input_dns_settings"></a> [dns\_settings](#input\_dns\_settings) | DNS settings of the zone, with the attributes of `cloudflare_zone_dns_settings` under the same names, except the deprecated `foundation_dns`. When `null`, the module leaves them alone. Write `flatten_all_cnames`, `multi_provider`, `ns_ttl`, `secondary_overrides` and `zone_mode`: one left out shows as a change to `null` at each plan. `soa` is only accepted on Enterprise zones: elsewhere the API refuses it, even unchanged (error 1003). Leave it out, and the plan shows no change: the provider reads it back from Cloudflare. Removing this argument resets nothing, see [DNS settings](#dns-settings). | <pre>object({<br/>    flatten_all_cnames = optional(bool)<br/>    internal_dns = optional(object({<br/>      reference_zone_id = optional(string)<br/>    }))<br/>    multi_provider = optional(bool)<br/>    nameservers = optional(object({<br/>      type              = string<br/>      nameserver_set_id = optional(string)<br/>      ns_set            = optional(number)<br/>    }))<br/>    ns_ttl              = optional(number)<br/>    secondary_overrides = optional(bool)<br/>    soa = optional(object({<br/>      expire  = optional(number)<br/>      min_ttl = optional(number)<br/>      mname   = optional(string)<br/>      refresh = optional(number)<br/>      retry   = optional(number)<br/>      rname   = optional(string)<br/>      ttl     = optional(number)<br/>    }))<br/>    zone_mode = optional(string)<br/>  })</pre> | `null` | no |
 | <a name="input_dnssec"></a> [dnssec](#input\_dnssec) | DNSSEC of the zone, with the attributes of `cloudflare_zone_dnssec` under the same names. When `null`, the module leaves DNSSEC alone. Set `status = "active"` to sign the zone, then give the `dnssec` output to the registrar. Removing this argument deletes the DNSSEC keys: remove the DS record at the registrar first, see [Turn DNSSEC off](#turn-dnssec-off). | <pre>object({<br/>    status              = optional(string)<br/>    dnssec_multi_signer = optional(bool)<br/>    dnssec_presigned    = optional(bool)<br/>    dnssec_use_nsec3    = optional(bool)<br/>  })</pre> | `null` | no |
 | <a name="input_paused"></a> [paused](#input\_paused) | Whether the zone only uses Cloudflare DNS, without the security and performance features. When `null`, the provider sets `false`. | `bool` | `null` | no |
 | <a name="input_records"></a> [records](#input\_records) | DNS records of the zone, by a key of your choice. The key only names the record in the state: keep it stable, since renaming a key replaces the record. Each record takes the attributes of `cloudflare_dns_record` under the same names, and `ttl` defaults to `1` (automatic). Set `content` for A, AAAA, CNAME, MX, NS, OPENPGPKEY, PTR and TXT records, `data` for the other types. | <pre>map(object({<br/>    name    = string<br/>    type    = string<br/>    ttl     = optional(number, 1)<br/>    content = optional(string)<br/>    data = optional(object({<br/>      algorithm      = optional(number)<br/>      altitude       = optional(number)<br/>      certificate    = optional(string)<br/>      digest         = optional(string)<br/>      digest_type    = optional(number)<br/>      fingerprint    = optional(string)<br/>      flags          = optional(any)<br/>      key_tag        = optional(number)<br/>      lat_degrees    = optional(number)<br/>      lat_direction  = optional(string)<br/>      lat_minutes    = optional(number)<br/>      lat_seconds    = optional(number)<br/>      long_degrees   = optional(number)<br/>      long_direction = optional(string)<br/>      long_minutes   = optional(number)<br/>      long_seconds   = optional(number)<br/>      matching_type  = optional(number)<br/>      order          = optional(number)<br/>      port           = optional(number)<br/>      precision_horz = optional(number)<br/>      precision_vert = optional(number)<br/>      preference     = optional(number)<br/>      priority       = optional(number)<br/>      protocol       = optional(number)<br/>      public_key     = optional(string)<br/>      regex          = optional(string)<br/>      replacement    = optional(string)<br/>      selector       = optional(number)<br/>      service        = optional(string)<br/>      size           = optional(number)<br/>      tag            = optional(string)<br/>      target         = optional(string)<br/>      type           = optional(number)<br/>      usage          = optional(number)<br/>      value          = optional(string)<br/>      weight         = optional(number)<br/>    }))<br/>    proxied  = optional(bool)<br/>    priority = optional(number)<br/>    comment  = optional(string)<br/>    tags     = optional(set(string))<br/>    settings = optional(object({<br/>      flatten_cname = optional(bool)<br/>      ipv4_only     = optional(bool)<br/>      ipv6_only     = optional(bool)<br/>    }))<br/>    private_routing         = optional(bool)<br/>    include_shadow_metadata = optional(bool)<br/>  }))</pre> | `{}` | no |

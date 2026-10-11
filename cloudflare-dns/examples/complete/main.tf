@@ -49,23 +49,16 @@ module "dns" {
     }
   }
 
-  # Every setting, since the provider reads them all back. These values are
-  # the defaults Cloudflare reports for a zone on the Free plan.
+  # Every simple setting, since the provider reads them all back. These
+  # values are the defaults Cloudflare reports for a zone on the Free plan.
+  # soa is left out: only Enterprise zones accept it.
   dns_settings = {
     flatten_all_cnames  = false
     multi_provider      = false
     nameservers         = { type = "cloudflare.standard" }
     ns_ttl              = 86400
     secondary_overrides = false
-    soa = {
-      expire  = 604800
-      min_ttl = 1800
-      refresh = 10000
-      retry   = 2400
-      rname   = "dns.cloudflare.com"
-      ttl     = 3600
-    }
-    zone_mode = "standard"
+    zone_mode           = "standard"
   }
 
   # Then give the dnssec output to the registrar.
