@@ -14,5 +14,6 @@ Releases are tagged `cloudflare-dns/vX.Y.Z`.
 - Zone: `account_id`, `name`, `type`, `paused` and `vanity_name_servers`
 - Adoption of an existing zone with `create_zone = false`, looked up by name
 - Outputs `zone_id`, `name`, `status`, `name_servers` and `verification_key`
+- Records: map `records` with the attributes of `cloudflare_dns_record`, and output `record_ids`
 
 [Unreleased]: https://github.com/theobs-digital/cloudflare-terraform-modules/commits/main/cloudflare-dns

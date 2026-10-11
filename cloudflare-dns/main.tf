@@ -37,3 +37,23 @@ locals {
     }
   ])
 }
+
+resource "cloudflare_dns_record" "this" {
+  for_each = var.records
+
+  zone_id         = local.zone.id
+  name            = each.value.name
+  type            = each.value.type
+  ttl             = each.value.ttl
+  content         = each.value.content
+  data            = each.value.data
+  proxied         = each.value.proxied
+  priority        = each.value.priority
+  comment         = each.value.comment
+  tags            = each.value.tags
+  settings        = each.value.settings
+  private_routing = each.value.private_routing
+
+  # Only asks the API to fill the computed `meta` attribute.
+  include_shadow_metadata = each.value.include_shadow_metadata
+}

@@ -22,3 +22,8 @@ output "verification_key" {
   description = "Verification key for a partial zone setup."
   value       = local.zone.verification_key
 }
+
+output "record_ids" {
+  description = "IDs of the DNS records, by key of `records`."
+  value       = { for key, record in cloudflare_dns_record.this : key => record.id }
+}
