@@ -42,6 +42,15 @@ block from `module.dns.cloudflare_dns_record.this["old"]` to
 See the [repository README](../README.md#usage) for the SSH form of the
 source and the versioning rules.
 
+### Examples
+
+- [basic](examples/basic): a new zone and a few records, with Cloudflare's
+  defaults for the rest.
+- [complete](examples/complete): every input of the module.
+- [import](examples/import): an existing zone and its records brought under
+  Terraform with `import` blocks, record IDs looked up by name, type and
+  content.
+
 ## Prerequisites
 
 The version constraints are listed under [Requirements](#requirements). The
