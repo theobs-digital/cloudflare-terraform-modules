@@ -12,7 +12,7 @@ Some of these need a paid plan, and the apply fails without one:
 |---|---|
 | `vanity_name_servers` | Business and Enterprise |
 | `tags` of a record | Pro, Business and Enterprise |
-| `settings.flatten_cname` of a record | Pro, Business and Enterprise |
+| `settings.flatten_cname = true` of a record | Pro, Business and Enterprise |
 
 Remove them to try the example on a Free plan.
 

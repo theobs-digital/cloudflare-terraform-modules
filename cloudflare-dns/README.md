@@ -69,6 +69,11 @@ Set `content` for A, AAAA, CNAME, MX, NS, OPENPGPKEY, PTR and TXT records, and
 such as `www`, or the fully qualified name: the provider matches it with the
 fully qualified name Cloudflare returns, and the plan shows no change.
 
+A record with `settings` is the exception: write its `name` fully qualified,
+or set all three fields, `flatten_cname`, `ipv4_only` and `ipv6_only`. With a
+relative name and only some of the fields, each plan shows an update of
+`modified_on` and nothing else.
+
 Cloudflare rewrites a few values. Write them the way it stores them, or each
 plan shows the difference again:
 
@@ -86,7 +91,7 @@ an SRV `target` without a final dot, the `value` of an HTTPS record or the
 A proxied record keeps `ttl` at its default, `1` (automatic): the provider
 refuses `proxied = true` with any other TTL, at apply and not at plan.
 
-Record `tags` and `settings.flatten_cname` need a paid plan, see the
+Record `tags` and `settings.flatten_cname = true` need a paid plan, see the
 [complete example](examples/complete).
 
 ### Rename a key

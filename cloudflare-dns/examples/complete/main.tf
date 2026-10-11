@@ -24,7 +24,9 @@ module "dns" {
     apex6 = { name = "@", type = "AAAA", content = "2001:db8::10", proxied = true }
     www   = { name = "www", type = "CNAME", content = "example.com", proxied = true }
     shop = {
-      name    = "shop"
+      # Fully qualified, since the record has settings: see Records in the
+      # module README.
+      name    = "shop.example.com"
       type    = "CNAME"
       content = "shops.example.net"
       ttl     = 3600
