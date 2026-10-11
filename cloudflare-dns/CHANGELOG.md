@@ -15,5 +15,7 @@ Releases are tagged `cloudflare-dns/vX.Y.Z`.
 - Adoption of an existing zone with `create_zone = false`, looked up by name
 - Outputs `zone_id`, `name`, `status`, `name_servers` and `verification_key`
 - Records: map `records` with the attributes of `cloudflare_dns_record`, and output `record_ids`
+- DNS settings with `dns_settings`, every attribute of `cloudflare_zone_dns_settings` but the deprecated `foundation_dns`, whose changes are ignored
+- DNSSEC with `dnssec`, and the `dnssec` output with the DS and DNSKEY fields to give the registrar
 
 [Unreleased]: https://github.com/theobs-digital/cloudflare-terraform-modules/commits/main/cloudflare-dns

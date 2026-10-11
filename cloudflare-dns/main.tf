@@ -57,3 +57,33 @@ resource "cloudflare_dns_record" "this" {
   # Only asks the API to fill the computed `meta` attribute.
   include_shadow_metadata = each.value.include_shadow_metadata
 }
+
+resource "cloudflare_zone_dns_settings" "this" {
+  count = var.dns_settings == null ? 0 : 1
+
+  zone_id             = local.zone.id
+  flatten_all_cnames  = var.dns_settings.flatten_all_cnames
+  internal_dns        = var.dns_settings.internal_dns
+  multi_provider      = var.dns_settings.multi_provider
+  nameservers         = var.dns_settings.nameservers
+  ns_ttl              = var.dns_settings.ns_ttl
+  secondary_overrides = var.dns_settings.secondary_overrides
+  soa                 = var.dns_settings.soa
+  zone_mode           = var.dns_settings.zone_mode
+
+  lifecycle {
+    # Deprecated, so left out of the module. The API still returns it, and
+    # without this each plan would set it back to null.
+    ignore_changes = [foundation_dns]
+  }
+}
+
+resource "cloudflare_zone_dnssec" "this" {
+  count = var.dnssec == null ? 0 : 1
+
+  zone_id             = local.zone.id
+  status              = var.dnssec.status
+  dnssec_multi_signer = var.dnssec.dnssec_multi_signer
+  dnssec_presigned    = var.dnssec.dnssec_presigned
+  dnssec_use_nsec3    = var.dnssec.dnssec_use_nsec3
+}

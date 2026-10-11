@@ -91,3 +91,43 @@ variable "records" {
   }))
   default = {}
 }
+
+variable "dns_settings" {
+  description = "DNS settings of the zone, with the attributes of `cloudflare_zone_dns_settings` under the same names, except the deprecated `foundation_dns`. When `null`, the module leaves them alone. Write every setting: one left out shows as a change to `null` at each plan. Removing this argument resets nothing, see [DNS settings](#dns-settings)."
+  type = object({
+    flatten_all_cnames = optional(bool)
+    internal_dns = optional(object({
+      reference_zone_id = optional(string)
+    }))
+    multi_provider = optional(bool)
+    nameservers = optional(object({
+      type              = string
+      nameserver_set_id = optional(string)
+      ns_set            = optional(number)
+    }))
+    ns_ttl              = optional(number)
+    secondary_overrides = optional(bool)
+    soa = optional(object({
+      expire  = optional(number)
+      min_ttl = optional(number)
+      mname   = optional(string)
+      refresh = optional(number)
+      retry   = optional(number)
+      rname   = optional(string)
+      ttl     = optional(number)
+    }))
+    zone_mode = optional(string)
+  })
+  default = null
+}
+
+variable "dnssec" {
+  description = "DNSSEC of the zone, with the attributes of `cloudflare_zone_dnssec` under the same names. When `null`, the module leaves DNSSEC alone. Set `status = \"active\"` to sign the zone, then give the `dnssec` output to the registrar. Removing this argument deletes the DNSSEC keys: remove the DS record at the registrar first, see [Turn DNSSEC off](#turn-dnssec-off)."
+  type = object({
+    status              = optional(string)
+    dnssec_multi_signer = optional(bool)
+    dnssec_presigned    = optional(bool)
+    dnssec_use_nsec3    = optional(bool)
+  })
+  default = null
+}
