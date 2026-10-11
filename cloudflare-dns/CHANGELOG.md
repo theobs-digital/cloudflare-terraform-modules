@@ -11,5 +11,8 @@ Releases are tagged `cloudflare-dns/vX.Y.Z`.
 ### Added
 
 - Requirements: Terraform >= 1.3 and provider `cloudflare/cloudflare` ~> 5.27
+- Zone: `account_id`, `name`, `type`, `paused` and `vanity_name_servers`
+- Adoption of an existing zone with `create_zone = false`, looked up by name
+- Outputs `zone_id`, `name`, `status`, `name_servers` and `verification_key`
 
 [Unreleased]: https://github.com/theobs-digital/cloudflare-terraform-modules/commits/main/cloudflare-dns

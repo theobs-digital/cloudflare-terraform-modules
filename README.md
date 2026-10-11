@@ -50,6 +50,11 @@ Install these tools before working on the repository:
 | [terraform-docs](https://terraform-docs.io/user-guide/installation/) | 0.24.0 | the tables between `BEGIN_TF_DOCS` and `END_TF_DOCS` in each module README |
 | [pre-commit](https://pre-commit.com/#install) | 4.5.1 | runs the hooks of `.pre-commit-config.yaml` |
 
+Working on a module takes Terraform 1.7 or later: its tests use
+`mock_provider`, and from 1.6 down `terraform init` fails in the module folder.
+Callers of a module only need the Terraform version in the module's own
+requirements, since Terraform does not read the tests of a child module.
+
 ### Checks
 
 Install the hooks once per clone, so that fmt, validate, tflint and
