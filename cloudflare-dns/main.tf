@@ -56,6 +56,10 @@ resource "cloudflare_dns_record" "this" {
 
   # Only asks the API to fill the computed `meta` attribute.
   include_shadow_metadata = each.value.include_shadow_metadata
+
+  # Cloudflare accepts DNSKEY records only once DNSSEC has
+  # `dnssec_multi_signer` on.
+  depends_on = [cloudflare_zone_dnssec.this]
 }
 
 resource "cloudflare_zone_dns_settings" "this" {
