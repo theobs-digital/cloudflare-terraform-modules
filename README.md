@@ -125,8 +125,25 @@ terraform plan -detailed-exitcode -var account_id=... -var zone=example.com
 terraform destroy -var account_id=... -var zone=example.com
 ```
 
-The [Real API tests](.github/workflows/tests-real.yml) workflow runs them
-every day with the newest provider 5.x, and on demand from the Actions tab.
+`cloudflare-zero-trust-networks/tests-real` works the same way, by hand: the
+tunnels, virtual networks and WARP Connectors are named `tf-test-ci-*`, the
+routes take `10.252.0.0/16` and `fd00:252::/48`, and the connectivity settings
+of the account are left alone. Cloudflare never returns the secret of the
+test tunnel: pass the same one to each command.
+
+```bash
+export CLOUDFLARE_API_TOKEN=...
+export TF_VAR_tunnel_secret="$(openssl rand -base64 32)"
+cd cloudflare-zero-trust-networks/tests-real
+terraform init
+terraform apply -var account_id=... -var zone=example.com
+terraform plan -detailed-exitcode -var account_id=... -var zone=example.com
+terraform destroy -var account_id=... -var zone=example.com
+```
+
+The [Real API tests](.github/workflows/tests-real.yml) workflow runs those of
+`cloudflare-dns` and `cloudflare-zero-trust-access` every day with the newest
+provider 5.x, and on demand from the Actions tab.
 For `cloudflare-zero-trust-access`, a second plan with a change fails the
 run: that is a provider that drifts from what it applied. It reads these
 repository secrets:
