@@ -859,11 +859,12 @@ whose ID is the `id` you give.
 - **The first apply of `organization` without an import** resets every
   setting it leaves out, and its plan does not show it. See
   [Adopt the organization](#adopt-the-organization).
-- **Renaming a key, or changing `type` of an identity provider**, replaces the
-  object, with a new ID: the AUD of an application changes, and origins that
+- **Renaming a key, changing `type` of an identity provider, or replacing
+  your own resources with the module** replaces the object, with a new ID: the AUD of an application changes, and origins that
   check it refuse its users; a service token gets a new client ID and secret;
   a short-lived certificate gets a new public key. Declare the move, see
-  [Rename a key](#rename-a-key).
+  [Rename a key](#rename-a-key) and
+  [Move resources into the module](#move-resources-into-the-module).
 - **Leaving `policies` out of an application** sends an empty list: the
   application keeps no policy.
 - **An `import` block on an mTLS certificate** plans to replace it, which
@@ -1000,6 +1001,71 @@ reusable one. The plan then shows no change, and updates keep the policy and
 its ID. To manage it as a reusable policy instead, convert it with
 `PUT /accounts/<account>/access/apps/<app>/policies/<policy>/make_reusable`,
 then import it into `access_policies`.
+
+### Move resources into the module
+
+When your configuration already manages these objects as its own resources,
+such as `resource "cloudflare_zero_trust_access_application" "wiki"`,
+replacing them with the module makes the plan destroy each object and create
+it again: a new ID, a new AUD, new secrets. Declare each move instead, from
+the resource to its entry in the module, under the key you give it:
+
+```hcl
+module "access" {
+  # ...
+  access_groups = {
+    staff = { name = "Staff", include = [{ email_domain = { domain = "example.com" } }] }
+  }
+  access_applications = {
+    wiki = {
+      name         = "Wiki"
+      type         = "self_hosted"
+      destinations = [{ type = "public", uri = "wiki.example.com" }]
+      policies     = [{ id = module.access.access_policy_ids["staff"], precedence = 1 }]
+    }
+  }
+  # ...
+}
+
+moved {
+  from = cloudflare_zero_trust_access_group.staff
+  to   = module.access.cloudflare_zero_trust_access_group.this["staff"]
+}
+
+moved {
+  from = cloudflare_zero_trust_access_application.wiki
+  to   = module.access.cloudflare_zero_trust_access_application.this["wiki"]
+}
+```
+
+Each entry takes the attributes of its resource, but `account_id`, and a
+reference such as `cloudflare_zero_trust_access_policy.staff.id` becomes
+`module.access.access_policy_ids["staff"]`. The plan then moves each object,
+and has nothing to add, change or destroy:
+
+```text
+  # cloudflare_zero_trust_access_application.wiki has moved to module.access.cloudflare_zero_trust_access_application.this["wiki"]
+  # cloudflare_zero_trust_access_group.staff has moved to module.access.cloudflare_zero_trust_access_group.this["staff"]
+Plan: 0 to add, 0 to change, 0 to destroy.
+```
+
+A change in that plan is an attribute that the entry writes differently from
+the resource: write it as the resource did. Applying records the moves in the
+state, and sends nothing to Cloudflare. This was checked with Terraform 1.3.10
+and 1.16.5 and provider 5.28.0, against a local copy of the API: the apply
+only read the objects.
+
+- A resource with `count` or `for_each` moves one instance at a time, such as
+  `from = cloudflare_zero_trust_access_group.all["staff"]`.
+- A setting of the account moves to `[0]`, such as
+  `to = module.access.cloudflare_zero_trust_organization.this[0]`.
+- Once every state of the configuration has applied them, the `moved` blocks
+  can go.
+- A `moved` block cannot leave its state. For objects that another
+  configuration manages, forget them there, with a `removed` block or
+  `terraform state rm`, see
+  [Stop managing without deleting](#stop-managing-without-deleting), then
+  import them here, see [Adopt an existing setup](#adopt-an-existing-setup).
 
 ### Import an mTLS certificate
 
