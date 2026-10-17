@@ -25,12 +25,16 @@ variables {
     svcb  = { name = "_dns.svcb.tf-test", type = "SVCB", data = { priority = 1, target = "dns.example.net.", value = "alpn=\"dot\"" } }
     uri   = { name = "_http._tcp.uri.tf-test", type = "URI", priority = 10, data = { weight = 1, target = "https://example.net/" } }
     loc   = { name = "loc.tf-test", type = "LOC", data = { lat_degrees = 48, lat_minutes = 51, lat_seconds = 24, lat_direction = "N", long_degrees = 2, long_minutes = 21, long_seconds = 7, long_direction = "E", altitude = 35, size = 1, precision_horz = 10000, precision_vert = 10 } }
+    spf   = { name = "spf.tf-test", type = "TXT", content = "\"v=spf1 include:_spf.example.net -all\"" }
+    dmarc = { name = "_dmarc.tf-test", type = "TXT", content = "\"v=DMARC1; p=reject; rua=mailto:dmarc@example.net\"" }
+    dkim  = { name = "s1._domainkey.tf-test", type = "TXT", content = "v=DKIM1; k=rsa; p=MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA4UHHe4zG1ThQ9WN1YUzVugJtqgi1palqCtwDnqCaTmC4dlvQFo1eU6auwa/72hG6w7Z7klA6+dE8cZoGDK3Y7Kj+MzIv62hEK6nsKWTmcPcckv8on0WRmV5XeaiPpLwU0F2fh9rhnrk0DzLaHurxQIdFYv7fi6aUIEkbklVaTBt3k1MEnNyYkwy+Ec4cJrdyPxkCkNas5Sx+MPsw6L3Fo40VAqcniiSDKqYPLIhwqLBsZKnvxNiiHxMdWsxyCAqfHOKEPRI8BeJ8c6nmWzPRYvsFKEsVKuii8ulKSY/flYuoZUTTMhscqCSpuIE3oFs0Z2oXkV5uIyhLVpIFuJUyJwIDAQAB" }
+    dkim2 = { name = "s2._domainkey.tf-test", type = "TXT", content = "\"v=DKIM1; k=rsa; p=MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA4UHHe4zG1ThQ9WN1YUzVugJtqgi1palqCtwDnqCaTmC4dlvQFo1eU6auwa/72hG6w7Z7klA6+dE8cZoGDK3Y7Kj+MzIv62hEK6nsKWTmcPcckv8on0WRmV5XeaiPpLwU0F2fh9rhnrk0DzLaHurxQIdFYv7fi6aUIEkbklVaTBt3k1MEnNyYkwy+Ec4cJrdyP\" \"xkCkNas5Sx+MPsw6L3Fo40VAqcniiSDKqYPLIhwqLBsZKnvxNiiHxMdWsxyCAqfHOKEPRI8BeJ8c6nmWzPRYvsFKEsVKuii8ulKSY/flYuoZUTTMhscqCSpuIE3oFs0Z2oXkV5uIyhLVpIFuJUyJwIDAQAB\"" }
   }
 }
 
 run "create" {
   assert {
-    condition     = length(output.record_ids) == 14
+    condition     = length(output.record_ids) == 18
     error_message = "Every record must be created."
   }
 }
@@ -62,6 +66,10 @@ run "update" {
       svcb  = { name = "_dns.svcb.tf-test", type = "SVCB", data = { priority = 2, target = "dns.example.net.", value = "alpn=\"dot\"" } }
       uri   = { name = "_http._tcp.uri.tf-test", type = "URI", priority = 20, data = { weight = 1, target = "https://example.net/" } }
       loc   = { name = "loc.tf-test", type = "LOC", data = { lat_degrees = 48, lat_minutes = 51, lat_seconds = 24, lat_direction = "N", long_degrees = 2, long_minutes = 21, long_seconds = 7, long_direction = "E", altitude = 40, size = 1, precision_horz = 10000, precision_vert = 10 } }
+      spf   = { name = "spf.tf-test", type = "TXT", content = "\"v=spf1 include:_spf.example.net -all\"" }
+      dmarc = { name = "_dmarc.tf-test", type = "TXT", content = "\"v=DMARC1; p=quarantine; rua=mailto:dmarc@example.net\"" }
+      dkim  = { name = "s1._domainkey.tf-test", type = "TXT", content = "v=DKIM1; k=rsa; p=MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA4UHHe4zG1ThQ9WN1YUzVugJtqgi1palqCtwDnqCaTmC4dlvQFo1eU6auwa/72hG6w7Z7klA6+dE8cZoGDK3Y7Kj+MzIv62hEK6nsKWTmcPcckv8on0WRmV5XeaiPpLwU0F2fh9rhnrk0DzLaHurxQIdFYv7fi6aUIEkbklVaTBt3k1MEnNyYkwy+Ec4cJrdyPxkCkNas5Sx+MPsw6L3Fo40VAqcniiSDKqYPLIhwqLBsZKnvxNiiHxMdWsxyCAqfHOKEPRI8BeJ8c6nmWzPRYvsFKEsVKuii8ulKSY/flYuoZUTTMhscqCSpuIE3oFs0Z2oXkV5uIyhLVpIFuJUyJwIDAQAB" }
+      dkim2 = { name = "s2._domainkey.tf-test", type = "TXT", content = "\"v=DKIM1; k=rsa; p=MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA4UHHe4zG1ThQ9WN1YUzVugJtqgi1palqCtwDnqCaTmC4dlvQFo1eU6auwa/72hG6w7Z7klA6+dE8cZoGDK3Y7Kj+MzIv62hEK6nsKWTmcPcckv8on0WRmV5XeaiPpLwU0F2fh9rhnrk0DzLaHurxQIdFYv7fi6aUIEkbklVaTBt3k1MEnNyYkwy+Ec4cJrdyP\" \"xkCkNas5Sx+MPsw6L3Fo40VAqcniiSDKqYPLIhwqLBsZKnvxNiiHxMdWsxyCAqfHOKEPRI8BeJ8c6nmWzPRYvsFKEsVKuii8ulKSY/flYuoZUTTMhscqCSpuIE3oFs0Z2oXkV5uIyhLVpIFuJUyJwIDAQAB\"" }
     }
   }
 
@@ -90,6 +98,10 @@ run "no_drift_after_update" {
       svcb  = { name = "_dns.svcb.tf-test", type = "SVCB", data = { priority = 2, target = "dns.example.net.", value = "alpn=\"dot\"" } }
       uri   = { name = "_http._tcp.uri.tf-test", type = "URI", priority = 20, data = { weight = 1, target = "https://example.net/" } }
       loc   = { name = "loc.tf-test", type = "LOC", data = { lat_degrees = 48, lat_minutes = 51, lat_seconds = 24, lat_direction = "N", long_degrees = 2, long_minutes = 21, long_seconds = 7, long_direction = "E", altitude = 40, size = 1, precision_horz = 10000, precision_vert = 10 } }
+      spf   = { name = "spf.tf-test", type = "TXT", content = "\"v=spf1 include:_spf.example.net -all\"" }
+      dmarc = { name = "_dmarc.tf-test", type = "TXT", content = "\"v=DMARC1; p=quarantine; rua=mailto:dmarc@example.net\"" }
+      dkim  = { name = "s1._domainkey.tf-test", type = "TXT", content = "v=DKIM1; k=rsa; p=MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA4UHHe4zG1ThQ9WN1YUzVugJtqgi1palqCtwDnqCaTmC4dlvQFo1eU6auwa/72hG6w7Z7klA6+dE8cZoGDK3Y7Kj+MzIv62hEK6nsKWTmcPcckv8on0WRmV5XeaiPpLwU0F2fh9rhnrk0DzLaHurxQIdFYv7fi6aUIEkbklVaTBt3k1MEnNyYkwy+Ec4cJrdyPxkCkNas5Sx+MPsw6L3Fo40VAqcniiSDKqYPLIhwqLBsZKnvxNiiHxMdWsxyCAqfHOKEPRI8BeJ8c6nmWzPRYvsFKEsVKuii8ulKSY/flYuoZUTTMhscqCSpuIE3oFs0Z2oXkV5uIyhLVpIFuJUyJwIDAQAB" }
+      dkim2 = { name = "s2._domainkey.tf-test", type = "TXT", content = "\"v=DKIM1; k=rsa; p=MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA4UHHe4zG1ThQ9WN1YUzVugJtqgi1palqCtwDnqCaTmC4dlvQFo1eU6auwa/72hG6w7Z7klA6+dE8cZoGDK3Y7Kj+MzIv62hEK6nsKWTmcPcckv8on0WRmV5XeaiPpLwU0F2fh9rhnrk0DzLaHurxQIdFYv7fi6aUIEkbklVaTBt3k1MEnNyYkwy+Ec4cJrdyP\" \"xkCkNas5Sx+MPsw6L3Fo40VAqcniiSDKqYPLIhwqLBsZKnvxNiiHxMdWsxyCAqfHOKEPRI8BeJ8c6nmWzPRYvsFKEsVKuii8ulKSY/flYuoZUTTMhscqCSpuIE3oFs0Z2oXkV5uIyhLVpIFuJUyJwIDAQAB\"" }
     }
   }
 
