@@ -95,8 +95,9 @@ tab. It reads three repository secrets:
 | `TEST_ZONE` | the name of the test zone |
 | `TEST_ACCOUNT_ID` | the ID of its account |
 
-A run cut short before its cleanup leaves records under `tf-test.<zone>`, and
-the next run fails on them until they are deleted.
+Before the tests, the workflow deletes `tf-test.<zone>` and every name under
+it, where a run cut short before its cleanup leaves its records. Keep these
+names for this workflow only.
 
 ### Release a module
 
