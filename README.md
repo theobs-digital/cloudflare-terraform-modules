@@ -85,6 +85,19 @@ export CLOUDFLARE_API_TOKEN=...
 terraform -chdir=cloudflare-dns test -test-directory=tests-real -var name=example.com -var account_id=...
 ```
 
+The [Real zone tests](.github/workflows/tests-real.yml) workflow runs them
+every Monday with the newest provider 5.x, and on demand from the Actions
+tab. It reads three repository secrets:
+
+| Secret | Value |
+|---|---|
+| `CLOUDFLARE_API_TOKEN` | a token for the test zone only: Zone → DNS → Edit and Zone → Zone → Read |
+| `TEST_ZONE` | the name of the test zone |
+| `TEST_ACCOUNT_ID` | the ID of its account |
+
+A run cut short before its cleanup leaves records under `tf-test.<zone>`, and
+the next run fails on them until they are deleted.
+
 ### Release a module
 
 Update the module's `CHANGELOG.md`, then tag the commit with the module prefix

@@ -1,0 +1,40 @@
+# The tests against a real zone, every week. Lock files are not committed, so
+# each run takes the newest provider 5.x and catches its regressions.
+name: Real zone tests
+
+on:
+  schedule:
+    - cron: "17 6 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Two runs at once would create the same records twice.
+concurrency: tests-real
+
+jobs:
+  cloudflare-dns:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: cloudflare-dns
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
+        with:
+          terraform_version: 1.16.5
+          terraform_wrapper: false
+
+      - run: terraform init -backend=false
+
+      # Secrets rather than variables: GitHub masks them in the public logs.
+      - run: terraform test -test-directory=tests-real -var "name=$ZONE" -var "account_id=$ACCOUNT_ID"
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          ZONE: ${{ secrets.TEST_ZONE }}
+          ACCOUNT_ID: ${{ secrets.TEST_ACCOUNT_ID }}
