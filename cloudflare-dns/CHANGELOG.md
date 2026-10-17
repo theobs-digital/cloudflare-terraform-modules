@@ -8,6 +8,10 @@ Releases are tagged `cloudflare-dns/vX.Y.Z`.
 
 ## [Unreleased]
 
+### Added
+
+- Workflow `Checks`: a job validating the module and its `basic` and `complete` examples with Terraform 1.3.10 and provider 5.27.0, the bottom of the requirements
+
 ## [1.2.0] - 2026-10-17
 
 No change to the module's code: documentation, tests and CI only.

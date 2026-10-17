@@ -75,7 +75,9 @@ terraform -chdir=cloudflare-dns test
 
 The [Checks](.github/workflows/checks.yml) workflow runs the same hooks, then
 the tests of every module, on each pull request and each push to `main`, with
-the tool versions listed above.
+the tool versions listed above. A second job validates `cloudflare-dns` with
+the bottom of its requirements, Terraform 1.3.10 and provider 5.27.0. Both
+must pass before a pull request can be merged into `main`.
 
 These tests mock the provider, so they cannot see what Cloudflare does with
 a value. A module can also hold tests against the real API, in `tests-real`,
