@@ -66,8 +66,7 @@ run "policy_minimal" {
   }
 }
 
-# One rule per selector, the 26 of the provider, in each of include, exclude
-# and require.
+# One rule per selector, the 26 of the provider.
 run "every_selector" {
   command = plan
 

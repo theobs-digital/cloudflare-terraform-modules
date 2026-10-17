@@ -28,8 +28,8 @@ run "no_identity_providers" {
   }
 }
 
-# The one-time PIN takes no setting. The dashboard creates it with an empty
-# name.
+# The one-time PIN takes no setting. Set up from the dashboard, it can have an
+# empty name.
 run "one_time_pin" {
   command = plan
 

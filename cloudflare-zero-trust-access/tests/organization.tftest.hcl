@@ -52,6 +52,8 @@ run "organization_minimal" {
 }
 
 run "organization" {
+  command = plan
+
   variables {
     organization = {
       allow_authenticate_via_warp = true

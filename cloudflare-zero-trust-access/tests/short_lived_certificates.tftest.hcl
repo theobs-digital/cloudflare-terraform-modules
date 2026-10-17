@@ -1,7 +1,6 @@
 mock_provider "cloudflare" {
   mock_resource "cloudflare_zero_trust_access_short_lived_certificate" {
     defaults = {
-      id         = "b6a1c4d2-7e3f-4a5b-9c8d-0e1f2a3b4c5d"
       public_key = "ecdsa-sha2-nistp256 AAAAE2VjZHNhLXNoYTItbmlzdHAyNTYAAAAIbmlzdHAyNTYAAABBBJ open-ssh-ca@cloudflareaccess.org"
     }
   }

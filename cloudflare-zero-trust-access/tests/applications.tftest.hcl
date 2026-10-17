@@ -527,12 +527,12 @@ run "infrastructure" {
           exclude  = { tags = { role = ["bastion"] } }
         }]
         # The API takes only policies written inside an infrastructure
-        # application.
+        # application, with fewer selectors: no Access group.
         policies = [{
           name       = "SRE"
           decision   = "allow"
           precedence = 1
-          include    = [{ group = { id = "aa0a4aab-672b-4bdb-bc33-a59f1130a11f" } }, { email = { email = "sre@example.com" } }]
+          include    = [{ email_domain = { domain = "example.com" } }, { email = { email = "sre@example.com" } }]
           exclude    = [{ geo = { country_code = "KP" } }]
           require    = [{ auth_method = { auth_method = "hwk" } }]
           connection_rules = {
@@ -550,9 +550,9 @@ run "infrastructure" {
         type            = "infrastructure"
         target_criteria = [{ port = 22, protocol = "SSH", target_attributes = { hostname = ["db-1"] } }]
         policies = [{
-          name             = "Everyone"
+          name             = "SRE"
           decision         = "allow"
-          include          = [{ everyone = {} }]
+          include          = [{ email = { email = "sre@example.com" } }]
           connection_rules = { ssh = { usernames = ["root"] } }
         }]
       }
@@ -571,7 +571,7 @@ run "infrastructure" {
     condition = (
       cloudflare_zero_trust_access_application.this["rules"].policies == var.access_applications["rules"].policies &&
       cloudflare_zero_trust_access_application.this["legacy"].policies[0].id == null &&
-      length([for rule in cloudflare_zero_trust_access_application.this["legacy"].policies[0].include : rule if rule.everyone != null]) == 1
+      cloudflare_zero_trust_access_application.this["legacy"].policies[0].include == var.access_applications["legacy"].policies[0].include
     )
     error_message = "Every field of a policy written in the application must reach it."
   }
