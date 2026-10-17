@@ -65,7 +65,8 @@ exist yet when the token is issued:
 Each entry of `records` takes the attributes of
 [`cloudflare_dns_record`](https://registry.terraform.io/providers/cloudflare/cloudflare/latest/docs/resources/dns_record).
 Set `content` for A, AAAA, CNAME, MX, NS, OPENPGPKEY, PTR and TXT records, and
-`data` for the other types. `name` can be `@`, a name relative to the zone
+`data` for the other types: the plan fails on a record with neither, or with
+both. `name` can be `@`, a name relative to the zone
 such as `www`, or the fully qualified name: the provider matches it with the
 fully qualified name Cloudflare returns, and the plan shows no change.
 
@@ -88,8 +89,8 @@ the other values as written, such as a TXT `content` with or without quotes,
 an SRV `target` without a final dot, the `value` of an HTTPS record or the
 `certificate` of a TLSA record.
 
-A proxied record keeps `ttl` at its default, `1` (automatic): the provider
-refuses `proxied = true` with any other TTL, at apply and not at plan.
+A proxied record keeps `ttl` at its default, `1` (automatic): Cloudflare sets
+the TTL of proxied records, and the plan fails on any other value.
 
 Record `tags` and `settings.flatten_cname = true` need a paid plan, see the
 [complete example](examples/complete).

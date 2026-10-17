@@ -90,6 +90,19 @@ variable "records" {
     include_shadow_metadata = optional(bool)
   }))
   default = {}
+
+  # Provider 5.27 lets a record without content or data through to the API.
+  validation {
+    condition     = alltrue([for record in values(var.records) : record.content != null || record.data != null])
+    error_message = "A record needs `content` or `data`, missing in: ${join(", ", [for key, record in var.records : key if record.content == null && record.data == null])}."
+  }
+
+  # Provider 5.27 checks this only when it creates the record, at apply, and
+  # lets an update through.
+  validation {
+    condition     = alltrue([for record in values(var.records) : record.proxied != true || record.ttl == 1])
+    error_message = "A proxied record takes `ttl = 1` (automatic), since Cloudflare sets its TTL: ${join(", ", [for key, record in var.records : key if record.proxied == true && record.ttl != 1])}."
+  }
 }
 
 variable "dns_settings" {

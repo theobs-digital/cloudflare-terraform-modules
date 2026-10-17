@@ -8,6 +8,10 @@ Releases are tagged `cloudflare-dns/vX.Y.Z`.
 
 ## [Unreleased]
 
+### Added
+
+- Plan-time checks on `records`, which the provider leaves to the apply: a record needs `content` or `data`, and a proxied record `ttl = 1`
+
 ## [1.0.0] - 2026-10-11
 
 ### Added

@@ -122,3 +122,28 @@ run "data_records" {
     error_message = "The SRV data must reach the record, without flags."
   }
 }
+
+# The provider lets both mistakes through the plan.
+run "record_without_value" {
+  command = plan
+
+  variables {
+    records = {
+      apex = { name = "@", type = "A" }
+    }
+  }
+
+  expect_failures = [var.records]
+}
+
+run "proxied_record_with_ttl" {
+  command = plan
+
+  variables {
+    records = {
+      apex = { name = "@", type = "A", content = "192.0.2.10", proxied = true, ttl = 300 }
+    }
+  }
+
+  expect_failures = [var.records]
+}
