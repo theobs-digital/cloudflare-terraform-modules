@@ -9,23 +9,24 @@ run "default_profile_left_alone" {
 
   assert {
     condition     = length(cloudflare_zero_trust_device_default_profile.this) == 0
-    error_message = "Without default_profile, the module must not manage the default profile."
+    error_message = "Without device_default_profile, the module must not manage the default profile."
   }
 
   assert {
     condition     = length(cloudflare_zero_trust_device_default_profile_local_domain_fallback.this) == 0
-    error_message = "Without default_profile_local_domain_fallback, the module must not manage the local domain fallback."
+    error_message = "Without device_default_profile_local_domain_fallback, the module must not manage the local domain fallback."
   }
 }
 
 # Every attribute, global_acceleration included: Cloudflare turns it on
 # through sales only, but the mock does not check plans.
+# Booleans are true: the mock fills a bool left out with false.
 run "default_profile" {
   variables {
-    default_profile = {
+    device_default_profile = {
       allow_mode_switch     = true
       allow_updates         = true
-      allowed_to_leave      = false
+      allowed_to_leave      = true
       auto_connect          = 600
       captive_portal        = 300
       disable_auto_fallback = true
@@ -46,7 +47,7 @@ run "default_profile" {
       ]
       lan_allow_minutes              = 30
       lan_allow_subnet_size          = 24
-      register_interface_ip_with_dns = false
+      register_interface_ip_with_dns = true
       sccm_vpn_boundary_support      = true
       service_mode_v2                = { mode = "proxy", port = 3128 }
       support_url                    = "https://support.example"
@@ -70,14 +71,14 @@ run "default_profile" {
     condition = (
       cloudflare_zero_trust_device_default_profile.this[0].allow_mode_switch == true &&
       cloudflare_zero_trust_device_default_profile.this[0].allow_updates == true &&
-      cloudflare_zero_trust_device_default_profile.this[0].allowed_to_leave == false &&
+      cloudflare_zero_trust_device_default_profile.this[0].allowed_to_leave == true &&
       cloudflare_zero_trust_device_default_profile.this[0].auto_connect == 600 &&
       cloudflare_zero_trust_device_default_profile.this[0].captive_portal == 300 &&
       cloudflare_zero_trust_device_default_profile.this[0].disable_auto_fallback == true &&
       cloudflare_zero_trust_device_default_profile.this[0].exclude_office_ips == true &&
       cloudflare_zero_trust_device_default_profile.this[0].lan_allow_minutes == 30 &&
       cloudflare_zero_trust_device_default_profile.this[0].lan_allow_subnet_size == 24 &&
-      cloudflare_zero_trust_device_default_profile.this[0].register_interface_ip_with_dns == false &&
+      cloudflare_zero_trust_device_default_profile.this[0].register_interface_ip_with_dns == true &&
       cloudflare_zero_trust_device_default_profile.this[0].sccm_vpn_boundary_support == true &&
       cloudflare_zero_trust_device_default_profile.this[0].support_url == "https://support.example" &&
       cloudflare_zero_trust_device_default_profile.this[0].switch_locked == true &&
@@ -88,7 +89,7 @@ run "default_profile" {
   }
 
   assert {
-    condition     = cloudflare_zero_trust_device_default_profile.this[0].include == var.default_profile.include
+    condition     = cloudflare_zero_trust_device_default_profile.this[0].include == var.device_default_profile.include
     error_message = "include must reach the default profile."
   }
 
@@ -110,12 +111,12 @@ run "default_profile" {
   }
 
   assert {
-    condition     = cloudflare_zero_trust_device_default_profile.this[0].global_acceleration == var.default_profile.global_acceleration
+    condition     = cloudflare_zero_trust_device_default_profile.this[0].global_acceleration == var.device_default_profile.global_acceleration
     error_message = "global_acceleration must reach the default profile."
   }
 
   assert {
-    condition     = cloudflare_zero_trust_device_default_profile.this[0].virtual_networks == var.default_profile.virtual_networks
+    condition     = cloudflare_zero_trust_device_default_profile.this[0].virtual_networks == var.device_default_profile.virtual_networks
     error_message = "virtual_networks must reach the default profile."
   }
 }
@@ -124,7 +125,7 @@ run "default_profile_exclude" {
   command = plan
 
   variables {
-    default_profile = {
+    device_default_profile = {
       exclude = [
         { address = "192.168.0.0/16" },
         { host = "printer.example", description = "Office printer" },
@@ -133,14 +134,14 @@ run "default_profile_exclude" {
   }
 
   assert {
-    condition     = cloudflare_zero_trust_device_default_profile.this[0].exclude == var.default_profile.exclude
+    condition     = cloudflare_zero_trust_device_default_profile.this[0].exclude == var.device_default_profile.exclude
     error_message = "exclude must reach the default profile."
   }
 }
 
 run "local_domain_fallback" {
   variables {
-    default_profile_local_domain_fallback = {
+    device_default_profile_local_domain_fallback = {
       domains = [
         { suffix = "corp.example", description = "Corporate", dns_server = ["10.0.0.53", "10.0.1.53"] },
         { suffix = "local" },
@@ -154,7 +155,7 @@ run "local_domain_fallback" {
   }
 
   assert {
-    condition     = cloudflare_zero_trust_device_default_profile_local_domain_fallback.this[0].domains == var.default_profile_local_domain_fallback.domains
+    condition     = cloudflare_zero_trust_device_default_profile_local_domain_fallback.this[0].domains == var.device_default_profile_local_domain_fallback.domains
     error_message = "Every domain must reach the local domain fallback."
   }
 

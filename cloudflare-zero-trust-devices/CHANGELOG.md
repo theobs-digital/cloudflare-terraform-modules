@@ -11,8 +11,11 @@ Releases are tagged `cloudflare-zero-trust-devices/vX.Y.Z`.
 ### Added
 
 - Requirements: Terraform >= 1.3 and provider `cloudflare/cloudflare` ~> 5.28
-- Device settings of the account with `settings`
-- Default profile with `default_profile`, and its local domain fallback with `default_profile_local_domain_fallback`, updated after the profile
-- Device client certificates by zone with `default_profile_certificates`
+- Device settings of the account with `device_settings`
+- Default profile with `device_default_profile`, and its local domain fallback with `device_default_profile_local_domain_fallback`, updated after the profile
+- Device client certificates by zone with `device_default_profile_certificates`
+- Custom profiles with `device_custom_profiles`, and their local domain fallbacks with `device_custom_profile_local_domain_fallbacks`, updated after the profiles
+- Managed networks with `device_managed_networks`, with an empty `config.sha256` by default
+- Outputs `device_custom_profile_ids`, `device_custom_profile_local_domain_fallback_ids` and `device_managed_network_ids`
 
 [Unreleased]: https://github.com/theobs-digital/cloudflare-terraform-modules/commits/main/cloudflare-zero-trust-devices

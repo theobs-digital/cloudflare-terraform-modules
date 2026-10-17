@@ -9,13 +9,13 @@ run "settings_left_alone" {
 
   assert {
     condition     = length(cloudflare_zero_trust_device_settings.this) == 0
-    error_message = "Without settings, the module must not manage the device settings."
+    error_message = "Without device_settings, the module must not manage the device settings."
   }
 }
 
 run "settings" {
   variables {
-    settings = {
+    device_settings = {
       disable_for_time                      = 3600
       external_emergency_signal_enabled     = true
       external_emergency_signal_fingerprint = "abd90f0f5a6b0b9a8f5c2f4b2c1d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d"
@@ -47,7 +47,7 @@ run "settings" {
   assert {
     condition = (
       cloudflare_zero_trust_device_settings.this[0].external_emergency_signal_enabled == true &&
-      cloudflare_zero_trust_device_settings.this[0].external_emergency_signal_fingerprint == var.settings.external_emergency_signal_fingerprint &&
+      cloudflare_zero_trust_device_settings.this[0].external_emergency_signal_fingerprint == var.device_settings.external_emergency_signal_fingerprint &&
       cloudflare_zero_trust_device_settings.this[0].external_emergency_signal_interval == "5m" &&
       cloudflare_zero_trust_device_settings.this[0].external_emergency_signal_url == "https://192.0.2.10/signal"
     )
@@ -61,7 +61,7 @@ run "settings_partial" {
   command = plan
 
   variables {
-    settings = {
+    device_settings = {
       gateway_proxy_enabled = true
     }
   }

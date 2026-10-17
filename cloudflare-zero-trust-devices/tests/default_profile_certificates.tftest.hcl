@@ -9,13 +9,13 @@ run "certificates_left_alone" {
 
   assert {
     condition     = length(cloudflare_zero_trust_device_default_profile_certificates.this) == 0
-    error_message = "Without default_profile_certificates, the module must not manage any zone."
+    error_message = "Without device_default_profile_certificates, the module must not manage any zone."
   }
 }
 
 run "certificates" {
   variables {
-    default_profile_certificates = {
+    device_default_profile_certificates = {
       example = { zone_id = "9f1839b6152d298aca64c4e906b6d074", enabled = true }
       other   = { zone_id = "8ac8489932db6327334c9b6d58544cfe", enabled = false }
     }
