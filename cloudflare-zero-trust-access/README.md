@@ -183,7 +183,8 @@ import {
 ```
 
 A one-time PIN set up from the dashboard can have an empty name: write
-`name = ""`, or the plan renames it.
+`name = ""`, or the plan renames it. An Entra ID provider returns
+`conditional_access_enabled = false`: write it, or the plan sets it to `null`.
 
 Cloudflare never returns `config.client_secret`. After an import, the plan
 shows the secret as an update: applying sends it again, and the next plan
@@ -259,6 +260,12 @@ module "access_base_groups" {
 
 and then `group = { id = module.access_base_groups.access_group_ids["sre"] }`
 in the groups of the main call.
+
+Terraform orders the work by input and by output, not by entry. Every entry
+of an input waits for every object behind each output that one of its
+entries refers to: when one of them fails, Terraform creates none of these
+entries. A refused custom page holds back every application, even those
+without it, and a refused application every short-lived certificate.
 
 ### Policy settings
 
@@ -366,12 +373,19 @@ access_applications = {
     policies = [{
       name             = "SRE"
       decision         = "allow"
-      include          = [{ group = { id = module.access.access_group_ids["sre"] } }]
+      include          = [{ email = { email = "sre@example.com" } }]
       connection_rules = { ssh = { usernames = ["root"] } }
     }]
   }
 }
 ```
+
+These policies take only some of the selectors, listed in Cloudflare's
+[infrastructure policy selectors](https://developers.cloudflare.com/cloudflare-one/access-controls/applications/non-http/infrastructure-apps/#infrastructure-policy-selectors):
+`email`, `email_domain`, `saml`, `geo`, `auth_method`, `device_posture`,
+`azure_ad`, `github_organization`, `gsuite` and `okta`. Cloudflare refuses
+the others, an Access group included: "rule type 'group' not supported by
+infrastructure apps" (code 12130).
 
 For the other types, Cloudflare calls a policy written inside an application
 legacy: its documentation says that one cannot be added to a new application,
@@ -444,7 +458,10 @@ import {
 
 After an import, the plan sets to `null` the booleans that Cloudflare returns
 as `false`, such as `auto_redirect_to_identity`, `enable_binding_cookie` and
-`options_preflight_bypass`: write them as `false`.
+`options_preflight_bypass`: write them as `false`. An `mcp` application
+returns the last two as well, which the provider refuses for this type: the
+plan sets them to `null`, applying it sends them so, and the next plan shows
+no change.
 
 An application with a legacy policy: refer to that policy by its ID, as to a
 reusable one. The plan then shows no change, and updates keep the policy and
@@ -686,9 +703,8 @@ Custom pages need a pay-as-you-go or Enterprise plan. On the Free plan,
 Cloudflare refuses a page: "account does not have permission for custom
 pages" (HTTP 403, code 12133). Custom pages are tested with mocks only.
 
-An application waits for every object that any entry of `access_applications`
-refers to: when one fails, such as a refused page, Terraform creates none of
-the applications.
+While a custom page fails, Terraform creates none of the applications, even
+those without it, see [Refer to other objects](#refer-to-other-objects).
 
 Import a tag by its name, and a custom page by its ID, both prefixed with the
 account:
