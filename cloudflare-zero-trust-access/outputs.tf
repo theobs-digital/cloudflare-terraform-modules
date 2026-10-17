@@ -8,3 +8,13 @@ output "access_identity_provider_scim_configs" {
   value       = { for key, idp in cloudflare_zero_trust_access_identity_provider.this : key => idp.scim_config }
   sensitive   = true
 }
+
+output "access_group_ids" {
+  description = "IDs of the Access groups, by key of `access_groups`."
+  value       = { for key, group in cloudflare_zero_trust_access_group.this : key => group.id }
+}
+
+output "access_policy_ids" {
+  description = "IDs of the reusable Access policies, by key of `access_policies`."
+  value       = { for key, policy in cloudflare_zero_trust_access_policy.this : key => policy.id }
+}
