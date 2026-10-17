@@ -1113,3 +1113,45 @@ variable "access_applications" {
   }))
   default = {}
 }
+
+variable "access_service_tokens" {
+  description = "Service tokens, by a key of your choice. The key only names the token in the state: keep it stable, since renaming a key replaces the token and its credentials. Each token takes the attributes of `cloudflare_zero_trust_access_service_token` under the same names. To rotate the secret, increment `client_secret_version` and set `previous_client_secret_expires_at`, together. See [Service tokens](#service-tokens)."
+  type = map(object({
+    name                              = string
+    client_secret_version             = optional(number)
+    duration                          = optional(string)
+    enabled                           = optional(bool)
+    previous_client_secret_expires_at = optional(string)
+  }))
+  default = {}
+}
+
+variable "access_mtls_certificates" {
+  description = "mTLS certificates: the certificate authorities that sign the client certificates Access accepts, by a key of your choice. The key only names the certificate in the state: keep it stable, since renaming a key replaces the certificate. Each certificate takes the attributes of `cloudflare_zero_trust_access_mtls_certificate` under the same names, with the PEM of the CA in `certificate`. Changing `certificate` replaces it. See [mTLS](#mtls)."
+  type = map(object({
+    certificate          = string
+    name                 = string
+    associated_hostnames = optional(set(string))
+  }))
+  default = {}
+}
+
+variable "access_mtls_hostname_settings" {
+  description = "mTLS settings of the account's hostnames, with the attributes of `cloudflare_zero_trust_access_mtls_hostname_settings` under the same names. When `null`, the module leaves them alone. `settings` replaces the whole list of the account, and removing this argument resets nothing. See [mTLS](#mtls)."
+  type = object({
+    settings = list(object({
+      china_network                 = bool
+      client_certificate_forwarding = bool
+      hostname                      = string
+    }))
+  })
+  default = null
+}
+
+variable "access_short_lived_certificates" {
+  description = "Short-lived certificate CAs, one per SSH application, by a key of your choice. Each takes the `app_id` of `cloudflare_zero_trust_access_short_lived_certificate`, such as `module.<name>.access_application_ids[\"<key>\"]`. Changing `app_id` replaces the CA, and its public key. See [Short-lived certificates](#short-lived-certificates)."
+  type = map(object({
+    app_id = string
+  }))
+  default = {}
+}

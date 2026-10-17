@@ -15,5 +15,8 @@ Releases are tagged `cloudflare-zero-trust-access/vX.Y.Z`.
 - Identity providers: map `access_identity_providers` with the attributes of `cloudflare_zero_trust_access_identity_provider`, and outputs `access_identity_provider_ids` and `access_identity_provider_scim_configs` (sensitive)
 - Access groups and reusable policies: maps `access_groups` and `access_policies` with the attributes of `cloudflare_zero_trust_access_group` and `cloudflare_zero_trust_access_policy`, and outputs `access_group_ids` and `access_policy_ids`
 - Access applications of the 14 types: map `access_applications` with the attributes of `cloudflare_zero_trust_access_application`, reusable policies by ID or, for infrastructure applications, policies written inside them, and outputs `access_application_ids`, `access_application_auds` and `access_application_saas_apps` (sensitive)
+- Service tokens: map `access_service_tokens` with the attributes of `cloudflare_zero_trust_access_service_token`, and outputs `access_service_token_ids`, `access_service_token_client_ids` and `access_service_token_client_secrets` (sensitive)
+- mTLS: map `access_mtls_certificates` with the attributes of `cloudflare_zero_trust_access_mtls_certificate`, output `access_mtls_certificate_ids`, and the account's hostname settings with `access_mtls_hostname_settings`, adopted by import
+- Short-lived SSH certificate authorities: map `access_short_lived_certificates` with the `app_id` of `cloudflare_zero_trust_access_short_lived_certificate`, and output `access_short_lived_certificate_public_keys`
 
 [Unreleased]: https://github.com/theobs-digital/cloudflare-terraform-modules/commits/main/cloudflare-zero-trust-access

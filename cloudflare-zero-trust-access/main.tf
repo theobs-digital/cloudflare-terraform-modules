@@ -110,3 +110,39 @@ resource "cloudflare_zero_trust_access_application" "this" {
   tags                            = each.value.tags
   target_criteria                 = each.value.target_criteria
 }
+
+resource "cloudflare_zero_trust_access_service_token" "this" {
+  for_each = var.access_service_tokens
+
+  account_id                        = var.account_id
+  name                              = each.value.name
+  client_secret_version             = each.value.client_secret_version
+  duration                          = each.value.duration
+  enabled                           = each.value.enabled
+  previous_client_secret_expires_at = each.value.previous_client_secret_expires_at
+}
+
+resource "cloudflare_zero_trust_access_mtls_certificate" "this" {
+  for_each = var.access_mtls_certificates
+
+  account_id           = var.account_id
+  certificate          = each.value.certificate
+  name                 = each.value.name
+  associated_hostnames = each.value.associated_hostnames
+}
+
+# Singleton: the provider's create updates the list of the account, its
+# destroy only forgets it.
+resource "cloudflare_zero_trust_access_mtls_hostname_settings" "this" {
+  count = var.access_mtls_hostname_settings == null ? 0 : 1
+
+  account_id = var.account_id
+  settings   = var.access_mtls_hostname_settings.settings
+}
+
+resource "cloudflare_zero_trust_access_short_lived_certificate" "this" {
+  for_each = var.access_short_lived_certificates
+
+  account_id = var.account_id
+  app_id     = each.value.app_id
+}
