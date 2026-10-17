@@ -70,3 +70,34 @@ variable "tunnel_cloudflared_configs" {
   }))
   default = {}
 }
+
+variable "tunnel_cloudflared_virtual_networks" {
+  description = "Virtual networks, by a key of your choice, with the attributes of `cloudflare_zero_trust_tunnel_cloudflared_virtual_network` under the same names. Left out, `is_default_network` is `false`: to import the default network of the account, write `true`, see [Default network](#default-network)."
+  type = map(object({
+    name               = string
+    comment            = optional(string)
+    is_default_network = optional(bool)
+  }))
+  default = {}
+}
+
+variable "tunnel_cloudflared_routes" {
+  description = "CIDR routes to tunnels, by a key of your choice, with the attributes of `cloudflare_zero_trust_tunnel_cloudflared_route` under the same names. `tunnel_id` takes an ID from the `tunnel_cloudflared_ids` output, and `virtual_network_id` one from `tunnel_cloudflared_virtual_network_ids`, or the IDs of objects created elsewhere. Write `network` as Cloudflare returns it, such as `10.0.0.0/24`. Left out, `virtual_network_id` is the default network of the account, see [CIDR routes](#cidr-routes)."
+  type = map(object({
+    network            = string
+    tunnel_id          = string
+    comment            = optional(string)
+    virtual_network_id = optional(string)
+  }))
+  default = {}
+}
+
+variable "network_hostname_routes" {
+  description = "Hostname routes to tunnels, by a key of your choice, with the attributes of `cloudflare_zero_trust_network_hostname_route` under the same names. Cloudflare requires `hostname` and `tunnel_id`, which the provider leaves optional. `tunnel_id` takes an ID from the `tunnel_cloudflared_ids` output, or the ID of a tunnel created elsewhere. Write `hostname` as Cloudflare returns it: lowercase, without a trailing dot or a leading `*.`. To remove `comment`, write `\"\"`, see [Hostname routes](#hostname-routes)."
+  type = map(object({
+    hostname  = string
+    tunnel_id = string
+    comment   = optional(string)
+  }))
+  default = {}
+}

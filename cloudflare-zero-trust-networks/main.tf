@@ -22,3 +22,31 @@ resource "cloudflare_zero_trust_tunnel_cloudflared_config" "this" {
   config     = each.value.config
   source     = each.value.source
 }
+
+resource "cloudflare_zero_trust_tunnel_cloudflared_virtual_network" "this" {
+  for_each = var.tunnel_cloudflared_virtual_networks
+
+  account_id         = var.account_id
+  name               = each.value.name
+  comment            = each.value.comment
+  is_default_network = each.value.is_default_network
+}
+
+resource "cloudflare_zero_trust_tunnel_cloudflared_route" "this" {
+  for_each = var.tunnel_cloudflared_routes
+
+  account_id         = var.account_id
+  network            = each.value.network
+  tunnel_id          = each.value.tunnel_id
+  comment            = each.value.comment
+  virtual_network_id = each.value.virtual_network_id
+}
+
+resource "cloudflare_zero_trust_network_hostname_route" "this" {
+  for_each = var.network_hostname_routes
+
+  account_id = var.account_id
+  hostname   = each.value.hostname
+  tunnel_id  = each.value.tunnel_id
+  comment    = each.value.comment
+}

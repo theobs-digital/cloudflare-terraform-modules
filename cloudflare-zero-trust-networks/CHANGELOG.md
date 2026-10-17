@@ -17,5 +17,11 @@ Releases are tagged `cloudflare-zero-trust-networks/vX.Y.Z`.
   `tunnel_cloudflared_tokens`
 - `tunnel_cloudflared_configs`, the remote configuration of tunnels: ingress
   rules and origin request settings
+- `tunnel_cloudflared_virtual_networks`, virtual networks, with their IDs in
+  `tunnel_cloudflared_virtual_network_ids`
+- `tunnel_cloudflared_routes`, CIDR routes to tunnels, with their IDs in
+  `tunnel_cloudflared_route_ids`
+- `network_hostname_routes`, hostname routes to tunnels, with their IDs in
+  `network_hostname_route_ids`
 
 [Unreleased]: https://github.com/theobs-digital/cloudflare-terraform-modules/commits/main/cloudflare-zero-trust-networks

@@ -8,3 +8,18 @@ output "tunnel_cloudflared_tokens" {
   value       = { for key, token in data.cloudflare_zero_trust_tunnel_cloudflared_token.this : key => token.token }
   sensitive   = true
 }
+
+output "tunnel_cloudflared_virtual_network_ids" {
+  description = "IDs of the virtual networks, by key of `tunnel_cloudflared_virtual_networks`, for the `virtual_network_id` of routes, Access applications and device profiles."
+  value       = { for key, network in cloudflare_zero_trust_tunnel_cloudflared_virtual_network.this : key => network.id }
+}
+
+output "tunnel_cloudflared_route_ids" {
+  description = "IDs of the CIDR routes, by key of `tunnel_cloudflared_routes`."
+  value       = { for key, route in cloudflare_zero_trust_tunnel_cloudflared_route.this : key => route.id }
+}
+
+output "network_hostname_route_ids" {
+  description = "IDs of the hostname routes, by key of `network_hostname_routes`."
+  value       = { for key, route in cloudflare_zero_trust_network_hostname_route.this : key => route.id }
+}
