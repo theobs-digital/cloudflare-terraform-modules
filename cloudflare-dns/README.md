@@ -37,6 +37,8 @@ and export it as `CLOUDFLARE_API_TOKEN`:
 | Zone → Zone → Edit | the zone |
 | Zone → DNS → Edit | records, DNS settings and DNSSEC |
 
+Adopting a zone another configuration owns takes less, see [Zone](#zone).
+
 **2. Call the module:**
 
 ```hcl
@@ -58,6 +60,9 @@ output "name_servers" {
   value = module.dns.name_servers
 }
 ```
+
+Find `account_id` in the dashboard, under **API** on a domain's **Overview**
+page, or search "Copy account ID" from Account home.
 
 **3. Apply, then delegate.** Set the `name_servers` output at your registrar.
 The zone stays `pending` until the registrar delegates the domain.
@@ -90,13 +95,17 @@ flowchart LR
 
 ## Inputs
 
-| Input | Required | Manages |
-|---|:-:|---|
-| `account_id`, `name` | ✅ | the zone, see [Zone](#zone) |
-| `create_zone`, `type`, `paused`, `vanity_name_servers` | | the zone, see [Zone](#zone) |
-| `records` | | the DNS records, see [Records](#records) |
-| `dns_settings` | | the DNS settings of the zone, see [DNS settings](#dns-settings) |
-| `dnssec` | | DNSSEC, see [DNSSEC](#dnssec) |
+| Input | Type | Default | Description |
+|---|---|---|---|
+| `account_id` | `string` | **required** | Cloudflare account that owns the zone |
+| `name` | `string` | **required** | domain of the zone, such as `example.com` |
+| `create_zone` | `bool` | `true` | `false` adopts a zone another configuration owns |
+| `type` | `string` | `"full"` | `full`, `partial`, `secondary` or `internal` |
+| `paused` | `bool` | `false` | `true`: DNS only, no security or performance features |
+| `vanity_name_servers` | `list(string)` | — | custom name servers, Business and Enterprise |
+| `records` | `map(object)` | `{}` | the DNS records, see [Records](#records) |
+| `dns_settings` | `object` | `null` | the DNS settings of the zone, see [DNS settings](#dns-settings) |
+| `dnssec` | `object` | `null` | DNSSEC, see [DNSSEC](#dnssec) |
 
 Each block below lists every attribute an input takes, with what it does.
 Attributes keep their provider names, and whatever you leave out keeps
@@ -106,21 +115,36 @@ Cloudflare's default, except in `dns_settings`.
 
 ```hcl
 # Required. Changing either one replaces the zone.
-account_id = "023e105f4ecef8ad9ca31a8372d0c353"
-name       = "example.com"
+account_id = "023e105f4ecef8ad9ca31a8372d0c353"  # dashboard: a domain's Overview page, API
+name       = "example.com"                       # the domain itself, not app.example.com
 
 # Optional. The values shown are what you get when you leave them out.
 create_zone = true    # false: adopt a zone another configuration owns
-type        = "full"  # full, partial, secondary or internal
+type        = "full"  # see the table below
 paused      = false   # true: Cloudflare DNS only, no security or performance features
 
 # Custom name servers. Business and Enterprise plans only.
 vanity_name_servers = ["ns1.example.com", "ns2.example.com"]
 ```
 
-With `create_zone = false`, the module looks the zone up by `name` in the
-account, manages only its records, DNS settings and DNSSEC, and ignores
-`type`, `paused` and `vanity_name_servers`.
+**`name`** is the domain you registered, `example.com`, not one of its
+subdomains such as `app.example.com`. A subdomain gets its own zone only
+with a subdomain setup, on Enterprise.
+
+**`type`** sets how Cloudflare serves the domain:
+
+| `type` | When | Plans |
+|---|---|---|
+| `full` | Cloudflare is the authoritative DNS of the domain. | all |
+| `partial` | CNAME setup: your DNS provider stays authoritative, and CNAME records there send the subdomains to proxy to Cloudflare. Prove you own the domain with a TXT record `cloudflare-verify.example.com` holding the `verification_key` output. | Business, Enterprise |
+| `secondary` | Cloudflare serves the zone by zone transfer from your primary DNS provider. | Enterprise |
+| `internal` | Internal DNS, for private names such as `corp.internal`. | Enterprise, with Cloudflare Gateway |
+
+**`create_zone = false`** adopts a zone another configuration owns: the
+module looks it up by `name` in the account, manages only its records, DNS
+settings and DNSSEC, and ignores `type`, `paused` and `vanity_name_servers`.
+The token then needs less, and on that zone only: Zone → Zone → Read to find
+the zone, and Zone → DNS → Edit for the rest.
 
 ### Records
 
@@ -133,15 +157,15 @@ attribute a record takes; a real record sets only those it needs, as in
 ```hcl
 records = {
   www = {
-    name = "www"    # required: "@" for the apex, "www", or "www.example.com"
-    type = "CNAME"  # required: one of the 21 types below
+    name = "www"    # required: "@" for the apex, "www", "www.example.com" or "*"
+    type = "CNAME"  # required: one of the 21 types in the table below
 
     # The value: content or data, never both.
     content = "example.com"  # A, AAAA, CNAME, MX, NS, OPENPGPKEY, PTR, TXT
     # data  = { ... }        # every other type, see the table below
 
     ttl      = 1             # default 1 (automatic), or 60 to 86400 seconds
-    proxied  = true          # traffic through Cloudflare; then ttl stays 1
+    proxied  = true          # A, AAAA and CNAME only; then ttl stays 1
     priority = 10            # MX, SRV and URI records only
     comment  = "Web front"   # a note for humans, no effect on DNS
     tags     = ["team:web"]  # labels, no effect on DNS. Pro plan and above
@@ -159,7 +183,12 @@ records = {
 ```
 
 The plan fails on a record with neither `content` nor `data`, with both, or
-proxied with a `ttl` other than `1`.
+proxied with a `ttl` other than `1`. Only A, AAAA and CNAME records can be
+proxied.
+
+**Wildcards**: `name = "*"` covers `*.example.com`, and `name = "*.app"`
+covers `*.app.example.com`. They work on every plan, proxied or not, and only
+as the first label.
 
 > [!WARNING]
 > **A misspelled attribute is dropped without a word.** Terraform discards
@@ -167,21 +196,29 @@ proxied with a `ttl` other than `1`.
 > or `dnssec`: `proxid = true` leaves the record unproxied, and the plan shows
 > no error. Check the names against the blocks on this page.
 
-**Fields of `data`, type by type:**
+**The 21 types, and where their value goes:**
 
-| Type | Fields of `data` |
+| Type | Value |
 |---|---|
-| CAA | `flags`, `tag`, `value` |
-| CERT | `type`, `key_tag`, `algorithm`, `certificate` |
-| DNSKEY | `flags`, `protocol`, `algorithm`, `public_key` |
-| DS | `key_tag`, `algorithm`, `digest_type`, `digest` |
-| HTTPS, SVCB | `priority`, `target`, `value` |
-| LOC | `lat_degrees`, `lat_minutes`, `lat_seconds`, `lat_direction`, `long_degrees`, `long_minutes`, `long_seconds`, `long_direction`, `altitude`, `size`, `precision_horz`, `precision_vert` |
-| NAPTR | `order`, `preference`, `flags`, `service`, `regex`, `replacement` |
-| SMIMEA, TLSA | `usage`, `selector`, `matching_type`, `certificate` |
-| SRV | `priority`, `weight`, `port`, `target`, plus `priority` at the top level |
-| SSHFP | `algorithm`, `type`, `fingerprint` |
-| URI | `weight`, `target`, plus `priority` at the top level |
+| A | `content`: an IPv4 address. Can be proxied |
+| AAAA | `content`: an IPv6 address. Can be proxied |
+| CNAME | `content`: a host name, other than the record's own. Can be proxied |
+| MX | `content`: the mail server's host name, plus `priority` at the top level |
+| NS | `content`: a name server's host name |
+| OPENPGPKEY | `content`: an OpenPGP public key, in Base64 |
+| PTR | `content`: the domain name the address points to |
+| TXT | `content`: the text |
+| CAA | `data`: `flags`, `tag`, `value` |
+| CERT | `data`: `type`, `key_tag`, `algorithm`, `certificate` |
+| DNSKEY | `data`: `flags`, `protocol`, `algorithm`, `public_key` |
+| DS | `data`: `key_tag`, `algorithm`, `digest_type`, `digest` |
+| HTTPS, SVCB | `data`: `priority`, `target`, `value` |
+| LOC | `data`: `lat_degrees`, `lat_minutes`, `lat_seconds`, `lat_direction`, `long_degrees`, `long_minutes`, `long_seconds`, `long_direction`, `altitude`, `size`, `precision_horz`, `precision_vert` |
+| NAPTR | `data`: `order`, `preference`, `flags`, `service`, `regex`, `replacement` |
+| SMIMEA, TLSA | `data`: `usage`, `selector`, `matching_type`, `certificate` |
+| SRV | `data`: `priority`, `weight`, `port`, `target`, plus `priority` at the top level |
+| SSHFP | `data`: `algorithm`, `type`, `fingerprint` |
+| URI | `data`: `weight`, `target`, plus `priority` at the top level |
 
 A DNSKEY record needs `dnssec_multi_signer = true` in [`dnssec`](#dnssec):
 the module creates records after DNSSEC, so the option is on first.
@@ -241,10 +278,10 @@ a change to `null` at each plan.
 dns_settings = {
   # Write all five.
   flatten_all_cnames  = false       # flatten every CNAME record of the zone
-  multi_provider      = false       # activate the zone despite other providers' NS records
+  multi_provider      = false       # true when another DNS provider serves the zone too
   ns_ttl              = 86400       # TTL of the zone's NS records
   secondary_overrides = false       # proxied overrides on a secondary zone
-  zone_mode           = "standard"  # standard, cdn_only or dns_only
+  zone_mode           = "standard"  # dns_only: serve DNS, never proxy HTTP
 
   # Optional: leave them out whole, and the plan shows no change.
   nameservers = { type = "cloudflare.standard" }  # cloudflare.advanced: Advanced Nameservers
@@ -257,6 +294,16 @@ These are the values Cloudflare reported for a zone on the Free plan on
 11 October 2026. Applied to that zone, the plan then showed no change.
 `nameservers` also takes `nameserver_set_id` and `ns_set`, for custom name
 server sets.
+
+**`multi_provider`** is for a zone that Cloudflare and another DNS provider
+both serve, with both providers' name servers at the registrar. Cloudflare
+then activates the zone despite the other provider's name servers, and
+answers with the NS records you add at the apex. With DNSSEC, such a zone
+needs multi-signer DNSSEC, see [DNSSEC](#dnssec).
+
+**`zone_mode`** takes `standard`, the default; `dns_only`, for a zone that
+Cloudflare serves as DNS only, without proxying HTTP; or `cdn_only`, which
+Cloudflare does not document.
 
 > [!WARNING]
 > **`soa` is for Enterprise zones only.** Elsewhere, Cloudflare refuses any
