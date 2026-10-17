@@ -8,6 +8,10 @@ Releases are tagged `cloudflare-dns/vX.Y.Z`.
 
 ## [Unreleased]
 
+## [1.2.1] - 2026-10-17
+
+No change to the module's code: documentation and CI only.
+
 ### Added
 
 - On the Terraform Registry as `theobs-digital/dns/cloudflare`: each release is also published, with the module at its root, to `theobs-digital/terraform-cloudflare-dns`, the repository the Registry reads
@@ -53,7 +57,8 @@ No change to the module's code: documentation, tests and CI only.
 - DNSSEC with `dnssec`, and the `dnssec` output with the DS and DNSKEY fields to give the registrar
 - Examples `basic`, `complete` and `import`
 
-[Unreleased]: https://github.com/theobs-digital/cloudflare-terraform-modules/compare/cloudflare-dns/v1.2.0...main
+[Unreleased]: https://github.com/theobs-digital/cloudflare-terraform-modules/compare/cloudflare-dns/v1.2.1...main
+[1.2.1]: https://github.com/theobs-digital/cloudflare-terraform-modules/compare/cloudflare-dns/v1.2.0...cloudflare-dns/v1.2.1
 [1.2.0]: https://github.com/theobs-digital/cloudflare-terraform-modules/compare/cloudflare-dns/v1.1.0...cloudflare-dns/v1.2.0
 [1.1.0]: https://github.com/theobs-digital/cloudflare-terraform-modules/compare/cloudflare-dns/v1.0.0...cloudflare-dns/v1.1.0
 [1.0.0]: https://github.com/theobs-digital/cloudflare-terraform-modules/releases/tag/cloudflare-dns/v1.0.0
