@@ -18,5 +18,9 @@ Releases are tagged `cloudflare-zero-trust-access/vX.Y.Z`.
 - Service tokens: map `access_service_tokens` with the attributes of `cloudflare_zero_trust_access_service_token`, and outputs `access_service_token_ids`, `access_service_token_client_ids` and `access_service_token_client_secrets` (sensitive)
 - mTLS: map `access_mtls_certificates` with the attributes of `cloudflare_zero_trust_access_mtls_certificate`, output `access_mtls_certificate_ids`, and the account's hostname settings with `access_mtls_hostname_settings`, adopted by import
 - Short-lived SSH certificate authorities: map `access_short_lived_certificates` with the `app_id` of `cloudflare_zero_trust_access_short_lived_certificate`, and output `access_short_lived_certificate_public_keys`
+- Tags and custom pages: maps `access_tags` and `access_custom_pages` with the attributes of `cloudflare_zero_trust_access_tag` and `cloudflare_zero_trust_access_custom_page`, and outputs `access_tag_ids` and `access_custom_page_ids`
+- Rotation of the signing keys with `access_key_configuration`, the attribute of `cloudflare_zero_trust_access_key_configuration`, adopted by import
+- Infrastructure targets: map `access_infrastructure_targets` with the attributes of `cloudflare_zero_trust_access_infrastructure_target`, and output `access_infrastructure_target_ids`
+- MCP servers and portals of AI controls: maps `access_ai_controls_mcp_servers` and `access_ai_controls_mcp_portals` with the attributes of `cloudflare_zero_trust_access_ai_controls_mcp_server` and `cloudflare_zero_trust_access_ai_controls_mcp_portal`, and output `access_ai_controls_mcp_server_ids`
 
 [Unreleased]: https://github.com/theobs-digital/cloudflare-terraform-modules/commits/main/cloudflare-zero-trust-access

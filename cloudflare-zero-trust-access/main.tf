@@ -146,3 +146,68 @@ resource "cloudflare_zero_trust_access_short_lived_certificate" "this" {
   account_id = var.account_id
   app_id     = each.value.app_id
 }
+
+resource "cloudflare_zero_trust_access_tag" "this" {
+  for_each = var.access_tags
+
+  account_id = var.account_id
+  name       = each.value.name
+}
+
+resource "cloudflare_zero_trust_access_custom_page" "this" {
+  for_each = var.access_custom_pages
+
+  account_id       = var.account_id
+  custom_html      = each.value.custom_html
+  name             = each.value.name
+  type             = each.value.type
+  contract_version = each.value.contract_version
+}
+
+# Singleton: the provider's create updates the account's setting, its destroy
+# only forgets it.
+resource "cloudflare_zero_trust_access_key_configuration" "this" {
+  count = var.access_key_configuration == null ? 0 : 1
+
+  account_id                 = var.account_id
+  key_rotation_interval_days = var.access_key_configuration.key_rotation_interval_days
+}
+
+resource "cloudflare_zero_trust_access_infrastructure_target" "this" {
+  for_each = var.access_infrastructure_targets
+
+  account_id = var.account_id
+  hostname   = each.value.hostname
+  ip         = each.value.ip
+  tags       = each.value.tags
+}
+
+resource "cloudflare_zero_trust_access_ai_controls_mcp_server" "this" {
+  for_each = var.access_ai_controls_mcp_servers
+
+  account_id                       = var.account_id
+  auth_type                        = each.value.auth_type
+  hostname                         = each.value.hostname
+  id                               = each.value.id
+  name                             = each.value.name
+  auth_credentials                 = each.value.auth_credentials
+  client_secret                    = each.value.client_secret
+  description                      = each.value.description
+  is_shared_oauth_callback_enabled = each.value.is_shared_oauth_callback_enabled
+  secure_web_gateway               = each.value.secure_web_gateway
+  updated_prompts                  = each.value.updated_prompts
+  updated_tools                    = each.value.updated_tools
+}
+
+resource "cloudflare_zero_trust_access_ai_controls_mcp_portal" "this" {
+  for_each = var.access_ai_controls_mcp_portals
+
+  account_id         = var.account_id
+  hostname           = each.value.hostname
+  id                 = each.value.id
+  name               = each.value.name
+  code_mode          = each.value.code_mode
+  description        = each.value.description
+  secure_web_gateway = each.value.secure_web_gateway
+  servers            = each.value.servers
+}

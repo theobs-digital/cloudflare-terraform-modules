@@ -60,3 +60,23 @@ output "access_short_lived_certificate_public_keys" {
   description = "Public keys of the short-lived certificate CAs, by key of `access_short_lived_certificates`. SSH servers trust it with `TrustedUserCAKeys`."
   value       = { for key, ca in cloudflare_zero_trust_access_short_lived_certificate.this : key => ca.public_key }
 }
+
+output "access_tag_ids" {
+  description = "IDs of the tags, by key of `access_tags`: a tag's ID is its name. An application takes them in `tags`."
+  value       = { for key, tag in cloudflare_zero_trust_access_tag.this : key => tag.id }
+}
+
+output "access_custom_page_ids" {
+  description = "IDs of the custom pages, by key of `access_custom_pages`. An application takes them in `custom_pages`, the organization in `custom_pages.forbidden` and `custom_pages.identity_denied`."
+  value       = { for key, page in cloudflare_zero_trust_access_custom_page.this : key => page.id }
+}
+
+output "access_infrastructure_target_ids" {
+  description = "IDs of the infrastructure targets, by key of `access_infrastructure_targets`."
+  value       = { for key, target in cloudflare_zero_trust_access_infrastructure_target.this : key => target.id }
+}
+
+output "access_ai_controls_mcp_server_ids" {
+  description = "IDs of the MCP servers, by key of `access_ai_controls_mcp_servers`. A portal takes them in `servers[*].server_id`, an `mcp` application in `destinations[*].mcp_server_id`."
+  value       = { for key, server in cloudflare_zero_trust_access_ai_controls_mcp_server.this : key => server.id }
+}

@@ -1155,3 +1155,107 @@ variable "access_short_lived_certificates" {
   }))
   default = {}
 }
+
+variable "access_tags" {
+  description = "Tags of Access applications, by a key of your choice. Each tag takes the `name` of `cloudflare_zero_trust_access_tag`, which is also its ID: changing it replaces the tag. An application of the same call refers to a tag with `tags = [module.<name>.access_tag_ids[\"<key>\"]]`. See [Tags and custom pages](#tags-and-custom-pages)."
+  type = map(object({
+    name = string
+  }))
+  default = {}
+}
+
+variable "access_custom_pages" {
+  description = "Custom pages of Access, by a key of your choice. The key only names the page in the state: keep it stable, since renaming a key replaces the page. Each page takes the attributes of `cloudflare_zero_trust_access_custom_page` under the same names. An application refers to a page with `custom_pages = [module.<name>.access_custom_page_ids[\"<key>\"]]`. See [Tags and custom pages](#tags-and-custom-pages)."
+  type = map(object({
+    custom_html      = string
+    name             = string
+    type             = string
+    contract_version = optional(number)
+  }))
+  default = {}
+}
+
+variable "access_key_configuration" {
+  description = "Rotation of the keys that sign Access tokens, with the attribute of `cloudflare_zero_trust_access_key_configuration`. When `null`, the module leaves it alone, and removing this argument resets nothing. See [Signing keys](#signing-keys)."
+  type = object({
+    key_rotation_interval_days = number
+  })
+  default = null
+}
+
+variable "access_infrastructure_targets" {
+  description = "Infrastructure targets: the servers that `infrastructure` applications protect, by a key of your choice. The key only names the target in the state: keep it stable, since renaming a key replaces the target. Each target takes the attributes of `cloudflare_zero_trust_access_infrastructure_target` under the same names. See [Infrastructure targets](#infrastructure-targets)."
+  type = map(object({
+    hostname = string
+    ip = object({
+      ipv4 = optional(object({
+        ip_addr            = optional(string)
+        virtual_network_id = optional(string)
+      }))
+      ipv6 = optional(object({
+        ip_addr            = optional(string)
+        virtual_network_id = optional(string)
+      }))
+    })
+    tags = optional(map(string))
+  }))
+  default = {}
+}
+
+variable "access_ai_controls_mcp_servers" {
+  description = "MCP servers of AI controls, by a key of your choice. Each server takes the attributes of `cloudflare_zero_trust_access_ai_controls_mcp_server` under the same names, with an `id` of your choice. Changing `id`, `auth_type` or `hostname` replaces the server. Keep `auth_credentials` and `client_secret` out of versioned files. See [MCP servers and portals](#mcp-servers-and-portals)."
+  type = map(object({
+    auth_type                        = string
+    hostname                         = string
+    id                               = string
+    name                             = string
+    auth_credentials                 = optional(string)
+    client_secret                    = optional(string)
+    description                      = optional(string)
+    is_shared_oauth_callback_enabled = optional(bool)
+    secure_web_gateway               = optional(bool)
+    updated_prompts = optional(list(object({
+      name        = string
+      alias       = optional(string)
+      description = optional(string)
+      enabled     = optional(bool)
+    })))
+    updated_tools = optional(list(object({
+      name        = string
+      alias       = optional(string)
+      description = optional(string)
+      enabled     = optional(bool)
+    })))
+  }))
+  default = {}
+}
+
+variable "access_ai_controls_mcp_portals" {
+  description = "MCP portals of AI controls, by a key of your choice. Each portal takes the attributes of `cloudflare_zero_trust_access_ai_controls_mcp_portal` under the same names, but the deprecated `allow_code_mode`, with an `id` of your choice: changing `id` replaces the portal. A portal refers to a server of the same call with `server_id = module.<name>.access_ai_controls_mcp_server_ids[\"<key>\"]`. See [MCP servers and portals](#mcp-servers-and-portals)."
+  type = map(object({
+    hostname           = string
+    id                 = string
+    name               = string
+    code_mode          = optional(string)
+    description        = optional(string)
+    secure_web_gateway = optional(bool)
+    servers = optional(set(object({
+      server_id        = string
+      default_disabled = optional(bool)
+      on_behalf        = optional(bool)
+      updated_prompts = optional(list(object({
+        name        = string
+        alias       = optional(string)
+        description = optional(string)
+        enabled     = optional(bool)
+      })))
+      updated_tools = optional(list(object({
+        name        = string
+        alias       = optional(string)
+        description = optional(string)
+        enabled     = optional(bool)
+      })))
+    })))
+  }))
+  default = {}
+}
