@@ -225,7 +225,7 @@ the module creates records after DNSSEC, so the option is on first.
 
 #### Values Cloudflare rewrites
 
-Cloudflare stores four values its own way. Write them as it stores them, or
+Cloudflare stores five values its own way. Write them as it stores them, or
 each plan shows the difference again:
 
 ```diff
@@ -244,11 +244,15 @@ each plan shows the difference again:
   # HTTPS, SVCB: target with its final dot, unless it is "."
 - target = "svc.example.net"
 + target = "svc.example.net."
+
+  # TXT over 255 characters: no quotes, or quoted strings of 255 at most
+- content = "\"v=DKIM1; k=rsa; p=MIIBIjANBgkq…\""
++ content = "v=DKIM1; k=rsa; p=MIIBIjANBgkq…"
 ```
 
-Everything else stays as written: a TXT `content` with or without quotes, an
-SRV `target` without a final dot, the `value` of an HTTPS record, the
-`certificate` of a TLSA record.
+Everything else stays as written: a TXT `content` with or without quotes,
+within that limit, an SRV `target` without a final dot, the `value` of an
+HTTPS record, the `certificate` of a TLSA record.
 
 #### Names and `settings`
 
@@ -399,7 +403,8 @@ going to `null`, write the value it had. To switch DNSSEC on or off, follow
 
 - A simple DNS setting, or a field of `soa`, left out: write them all, see
   [DNS settings](#dns-settings).
-- An SRV, NAPTR, SSHFP, HTTPS or SVCB record written your own way: see
+- An SRV, NAPTR, SSHFP, HTTPS or SVCB record written your own way, or a
+  quoted TXT string over 255 characters: see
   [Values Cloudflare rewrites](#values-cloudflare-rewrites).
 - A record with `settings`, a short `name` and not all three fields: see
   [Names and `settings`](#names-and-settings).
@@ -477,6 +482,40 @@ caa:
     flags: 0
     tag: issue
     value: letsencrypt.org
+```
+
+### Email records: SPF, DKIM and DMARC
+
+The module has no input of its own for email: SPF, DKIM and DMARC are TXT
+records in `records`, with the values your mail provider gives.
+
+```hcl
+records = {
+  # SPF: the servers allowed to send mail for the domain. One per name.
+  spf = { name = "@", type = "TXT", content = "\"v=spf1 include:_spf.example.net -all\"" }
+
+  # DKIM: the public key of a selector, here s1. No quotes, see below.
+  dkim = { name = "s1._domainkey", type = "TXT", content = "v=DKIM1; k=rsa; p=MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA…" }
+
+  # DMARC: what receivers do with mail that fails SPF and DKIM.
+  dmarc = { name = "_dmarc", type = "TXT", content = "\"v=DMARC1; p=reject; rua=mailto:dmarc@example.com\"" }
+}
+```
+
+A 2048-bit DKIM key makes a value over 255 characters, the most one string of
+a TXT record holds. Write it without quotes: Cloudflare keeps it as written,
+and serves it split into strings of 255 characters, which DKIM joins back.
+Or split it yourself into quoted strings of 255 characters at most. Within
+one pair of quotes, Cloudflare splits it, and each plan shows the difference
+again. Some mail providers publish DKIM as a CNAME record to their own TXT
+record instead: declare that CNAME.
+
+A domain that sends no mail can still say so, and ask receivers to reject
+any mail in its name:
+
+```hcl
+  spf   = { name = "@", type = "TXT", content = "\"v=spf1 -all\"" }
+  dmarc = { name = "_dmarc", type = "TXT", content = "\"v=DMARC1; p=reject\"" }
 ```
 
 ### Rename a record key
