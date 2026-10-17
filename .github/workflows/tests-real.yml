@@ -1,4 +1,4 @@
-# The tests against a real zone, every week. Lock files are not committed, so
+# The tests against a real zone, every day. Lock files are not committed, so
 # each run takes the newest provider 5.x and catches its regressions.
 name: Real zone tests
 

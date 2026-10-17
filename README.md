@@ -86,8 +86,8 @@ terraform -chdir=cloudflare-dns test -test-directory=tests-real -var name=exampl
 ```
 
 The [Real zone tests](.github/workflows/tests-real.yml) workflow runs them
-every Monday with the newest provider 5.x, and on demand from the Actions
-tab. It reads three repository secrets:
+every day with the newest provider 5.x, and on demand from the Actions tab.
+It reads three repository secrets:
 
 | Secret | Value |
 |---|---|
