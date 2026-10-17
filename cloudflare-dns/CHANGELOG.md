@@ -8,6 +8,8 @@ Releases are tagged `cloudflare-dns/vX.Y.Z`.
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-10-17
+
 ### Added
 
 - Plan-time checks on `records`, which the provider leaves to the apply: a record needs `content` or `data`, and a proxied record `ttl = 1`
@@ -25,5 +27,6 @@ Releases are tagged `cloudflare-dns/vX.Y.Z`.
 - DNSSEC with `dnssec`, and the `dnssec` output with the DS and DNSKEY fields to give the registrar
 - Examples `basic`, `complete` and `import`
 
-[Unreleased]: https://github.com/theobs-digital/cloudflare-terraform-modules/compare/cloudflare-dns/v1.0.0...main
+[Unreleased]: https://github.com/theobs-digital/cloudflare-terraform-modules/compare/cloudflare-dns/v1.1.0...main
+[1.1.0]: https://github.com/theobs-digital/cloudflare-terraform-modules/compare/cloudflare-dns/v1.0.0...cloudflare-dns/v1.1.0
 [1.0.0]: https://github.com/theobs-digital/cloudflare-terraform-modules/releases/tag/cloudflare-dns/v1.0.0

@@ -14,7 +14,7 @@ Releases are tagged `cloudflare-dns/vX.Y.Z` and listed in the
 
 ```hcl
 module "dns" {
-  source = "github.com/theobs-digital/cloudflare-terraform-modules//cloudflare-dns?ref=cloudflare-dns/v1.0.0"
+  source = "github.com/theobs-digital/cloudflare-terraform-modules//cloudflare-dns?ref=cloudflare-dns/v1.1.0"
 
   account_id = "023e105f4ecef8ad9ca31a8372d0c353"
   name       = "example.com"
