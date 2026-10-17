@@ -8,6 +8,8 @@ Releases are tagged `cloudflare-zero-trust-access/vX.Y.Z`.
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-10-17
+
 ### Added
 
 - Requirements: Terraform >= 1.3 and provider `cloudflare/cloudflare` ~> 5.28
@@ -22,5 +24,7 @@ Releases are tagged `cloudflare-zero-trust-access/vX.Y.Z`.
 - Rotation of the signing keys with `access_key_configuration`, the attribute of `cloudflare_zero_trust_access_key_configuration`, adopted by import
 - Infrastructure targets: map `access_infrastructure_targets` with the attributes of `cloudflare_zero_trust_access_infrastructure_target`, and output `access_infrastructure_target_ids`
 - MCP servers and portals of AI controls: maps `access_ai_controls_mcp_servers` and `access_ai_controls_mcp_portals` with the attributes of `cloudflare_zero_trust_access_ai_controls_mcp_server` and `cloudflare_zero_trust_access_ai_controls_mcp_portal`, and output `access_ai_controls_mcp_server_ids`
+- Examples `basic`, `complete` and `import`
 
-[Unreleased]: https://github.com/theobs-digital/cloudflare-terraform-modules/commits/main/cloudflare-zero-trust-access
+[Unreleased]: https://github.com/theobs-digital/cloudflare-terraform-modules/compare/cloudflare-zero-trust-access/v1.0.0...main
+[1.0.0]: https://github.com/theobs-digital/cloudflare-terraform-modules/releases/tag/cloudflare-zero-trust-access/v1.0.0
