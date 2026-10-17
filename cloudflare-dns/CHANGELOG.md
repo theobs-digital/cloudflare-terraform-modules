@@ -10,7 +10,12 @@ Releases are tagged `cloudflare-dns/vX.Y.Z`.
 
 ### Added
 
+- On the Terraform Registry as `theobs-digital/dns/cloudflare`: each release is also published, with the module at its root, to `theobs-digital/terraform-cloudflare-dns`, the repository the Registry reads
 - Workflow `Checks`: a job validating the module and its `basic` and `complete` examples with Terraform 1.3.10 and provider 5.27.0, the bottom of the requirements
+
+### Changed
+
+- README: the Quick start takes the module from the Terraform Registry
 
 ## [1.2.0] - 2026-10-17
 

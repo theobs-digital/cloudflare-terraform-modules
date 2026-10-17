@@ -43,7 +43,8 @@ Adopting a zone another configuration owns takes less, see [Zone](#zone).
 
 ```hcl
 module "dns" {
-  source = "github.com/theobs-digital/cloudflare-terraform-modules//cloudflare-dns?ref=cloudflare-dns/v1.2.0"
+  source  = "theobs-digital/dns/cloudflare"
+  version = "~> 1.2"
 
   account_id = "023e105f4ecef8ad9ca31a8372d0c353"
   name       = "example.com"
@@ -68,8 +69,8 @@ page, or search "Copy account ID" from Account home.
 The zone stays `pending` until the registrar delegates the domain.
 
 > [!TIP]
-> Always pin `ref` to a tag: without it, Terraform takes the latest commit of
-> `main`. The SSH form of `source` and the versioning rules are in the
+> `version = "~> 1.2"` takes the newest 1.x release from 1.2 on, never 2.0.
+> The module also comes from Git, with a tag in `ref`, see the
 > [repository README](../README.md#usage).
 
 More in the examples: [basic](examples/basic) (a few records, defaults for

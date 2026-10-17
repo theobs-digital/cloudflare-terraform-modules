@@ -7,15 +7,32 @@ keeps its attribute names, so whoever knows the provider knows the module.
 
 ## Modules
 
-| Module | Manages | Latest release |
-|---|---|---|
-| [`cloudflare-dns`](cloudflare-dns) | A DNS zone: the zone, its records, its DNS settings and DNSSEC | [`cloudflare-dns/v1.2.0`](cloudflare-dns/CHANGELOG.md) |
+| Module | Manages | Terraform Registry | Latest release |
+|---|---|---|---|
+| [`cloudflare-dns`](cloudflare-dns) | A DNS zone: the zone, its records, its DNS settings and DNSSEC | [`theobs-digital/dns/cloudflare`](https://registry.terraform.io/modules/theobs-digital/dns/cloudflare) | [`cloudflare-dns/v1.2.0`](cloudflare-dns/CHANGELOG.md) |
 
 ## Usage
 
+Take a module from the Terraform Registry, with a version constraint:
+
+```hcl
+module "dns" {
+  source  = "theobs-digital/dns/cloudflare"
+  version = "~> 1.2"
+
+  # ...
+}
+```
+
+The Registry needs one repository per module, with the module at its root.
+Each release is therefore also published to the module's own repository,
+such as [`terraform-cloudflare-dns`](https://github.com/theobs-digital/terraform-cloudflare-dns),
+tagged `vX.Y.Z`. That repository is a copy: issues and pull requests come here.
+
 Each module lives in its own folder and is released on its own, under a tag
-prefixed by the folder name, such as `cloudflare-dns/v1.0.0`. Reference a
-module by Git, with the folder after `//` and the tag in `ref`:
+prefixed by the folder name, such as `cloudflare-dns/v1.0.0`. To take a
+module from this repository instead, reference it by Git, with the folder
+after `//` and the tag in `ref`:
 
 ```hcl
 module "dns" {
@@ -33,9 +50,6 @@ Releases follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html),
 module by module, and each module records its changes in its own
 `CHANGELOG.md`. Always set `ref` to a tag: without it, Terraform takes the
 latest commit of the default branch.
-
-The modules are not published on the Terraform Registry, which requires one
-repository per module.
 
 ## Development
 
@@ -114,6 +128,12 @@ and push the tag:
 git tag -a cloudflare-dns/vX.Y.Z -m "cloudflare-dns vX.Y.Z"
 git push origin cloudflare-dns/vX.Y.Z
 ```
+
+The tag also starts the [Mirror cloudflare-dns](.github/workflows/mirror-cloudflare-dns.yml)
+workflow, which publishes the release to `terraform-cloudflare-dns` as
+`vX.Y.Z`, and the Terraform Registry picks it up from there. It pushes with a
+deploy key that can write to that repository only, kept in the
+`MIRROR_DEPLOY_KEY` secret, and never overwrites a version already published.
 
 ## License
 
