@@ -91,11 +91,12 @@ terraform -chdir=cloudflare-dns test
 
 The [Checks](.github/workflows/checks.yml) workflow runs the same hooks, then
 the tests of every module, on each pull request and each push to `main`, with
-the tool versions listed above. Two more jobs validate each module with the
+the tool versions listed above. Three more jobs validate each module with the
 bottom of its requirements: `cloudflare-dns` with Terraform 1.3.10 and
-provider 5.27.0, `cloudflare-zero-trust-access` with Terraform 1.3.10 and
-provider 5.28.0. The branch protection of `main` lists the jobs a pull
-request must pass before it is merged.
+provider 5.27.0, `cloudflare-zero-trust-access` and
+`cloudflare-zero-trust-networks` with Terraform 1.3.10 and provider 5.28.0.
+The branch protection of `main` lists the jobs a pull request must pass
+before it is merged.
 
 These tests mock the provider, so they cannot see what Cloudflare does with
 a value. A module can also hold tests against the real API, in `tests-real`,
