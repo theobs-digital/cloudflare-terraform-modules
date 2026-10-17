@@ -50,3 +50,36 @@ resource "cloudflare_zero_trust_network_hostname_route" "this" {
   tunnel_id  = each.value.tunnel_id
   comment    = each.value.comment
 }
+
+resource "cloudflare_zero_trust_tunnel_warp_connector" "this" {
+  for_each = var.tunnel_warp_connectors
+
+  account_id    = var.account_id
+  name          = each.value.name
+  ha            = each.value.ha
+  tunnel_secret = each.value.tunnel_secret
+}
+
+data "cloudflare_zero_trust_tunnel_warp_connector_token" "this" {
+  for_each = var.tunnel_warp_connectors
+
+  account_id = var.account_id
+  tunnel_id  = cloudflare_zero_trust_tunnel_warp_connector.this[each.key].id
+}
+
+resource "cloudflare_zero_trust_tunnel_warp_connector_config" "this" {
+  for_each = var.tunnel_warp_connector_configs
+
+  account_id = var.account_id
+  tunnel_id  = each.value.tunnel_id
+  ha_mode    = each.value.ha_mode
+  config     = each.value.config
+}
+
+resource "cloudflare_zero_trust_connectivity_settings" "this" {
+  count = var.connectivity_settings == null ? 0 : 1
+
+  account_id           = var.account_id
+  icmp_proxy_enabled   = var.connectivity_settings.icmp_proxy_enabled
+  offramp_warp_enabled = var.connectivity_settings.offramp_warp_enabled
+}

@@ -23,5 +23,12 @@ Releases are tagged `cloudflare-zero-trust-networks/vX.Y.Z`.
   `tunnel_cloudflared_route_ids`
 - `network_hostname_routes`, hostname routes to tunnels, with their IDs in
   `network_hostname_route_ids`
+- `tunnel_warp_connectors`, WARP Connectors (Mesh nodes), with their IDs in
+  `tunnel_warp_connector_ids` and the tokens that register their hosts in the
+  sensitive `tunnel_warp_connector_tokens`
+- `tunnel_warp_connector_configs`, the HA configuration of WARP Connectors:
+  `ha_mode`, virtual IPs or AWS network interface
+- `connectivity_settings`, the ICMP proxy and WARP-to-WARP settings of the
+  account, left alone when `null`
 
 [Unreleased]: https://github.com/theobs-digital/cloudflare-terraform-modules/commits/main/cloudflare-zero-trust-networks
