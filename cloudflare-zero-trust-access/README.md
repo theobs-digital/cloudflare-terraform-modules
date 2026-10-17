@@ -1,22 +1,63 @@
 # cloudflare-zero-trust-access
 
-Terraform module that manages Cloudflare Access, the access control of
-Cloudflare One: the Zero Trust organization, identity providers, access
-groups and reusable policies, applications, service tokens, mTLS
-certificates and their hostname settings, short-lived SSH certificates,
-tags, custom pages, the rotation of signing keys, infrastructure targets, and
-the MCP servers and portals of AI controls, on top of the
-`cloudflare/cloudflare` provider. Every provider attribute of these resources
-that is not deprecated is available under the same name.
+[![Release](https://img.shields.io/github/v/tag/theobs-digital/cloudflare-terraform-modules?filter=cloudflare-zero-trust-access%2F*&label=release&color=F38020)](CHANGELOG.md)
+[![Terraform](https://img.shields.io/badge/terraform-%E2%89%A5%201.3-7B42BC?logo=terraform&logoColor=white)](#requirements)
+[![Cloudflare provider](https://img.shields.io/badge/cloudflare%20provider-~%3E%205.28-F38020?logo=cloudflare&logoColor=white)](https://registry.terraform.io/providers/cloudflare/cloudflare/latest)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue)](../LICENSE)
 
-The module works at the account level: Access objects attached to a zone are
-not covered. Applications refer to reusable policies by ID, except
-infrastructure applications, which only take policies written inside them.
+**All of Cloudflare Access in one module block: the Zero Trust organization,
+identity providers, groups and policies, applications of every type, service
+tokens, certificates, and the MCP servers and portals of AI controls.**
 
-The module is not released yet. The first release will be tagged
-`cloudflare-zero-trust-access/v1.0.0`, see the [CHANGELOG](CHANGELOG.md).
+- 🧩 **The provider, unchanged.** 15 resources, every attribute that is not
+  deprecated, under its provider name. If you know `cloudflare/cloudflare`,
+  you already know this module.
+- 🔗 **Objects that refer to each other.** A policy names a group, an
+  application a policy, a portal a server, through the module's outputs, in
+  the same block.
+- 📥 **Adopt what exists.** The import example brings an existing Access setup
+  under Terraform by name, without copying an ID from the dashboard.
+- 🔬 **Checked against the real API.** What Cloudflare refuses, rewrites or
+  never returns was observed on a Zero Trust organization with provider
+  5.28.0, and is written here.
 
-## Usage
+> [!IMPORTANT]
+> The first apply of `organization` resets every setting it leaves out, and
+> its plan does not show it. Import the organization first, see
+> [Adopt the organization](#adopt-the-organization).
+
+**[Quick start](#quick-start)** · **[Inputs](#inputs)** ·
+**[Outputs](#outputs)** · **[Watch out](#watch-out)** ·
+**[Guides](#guides)** · **[Requirements](#requirements)**
+
+## Quick start
+
+**1. Create the Zero Trust organization** in the Zero Trust dashboard, if the
+account has none: Terraform does not create it, and the dashboard picks its
+team name.
+
+**2. Create an API token** with these account permissions, as Cloudflare's
+[API token permissions](https://developers.cloudflare.com/fundamentals/api/reference/permissions/)
+and API schema list them, and export it as `CLOUDFLARE_API_TOKEN`. Grant only
+those of the inputs you use:
+
+| Permission | Covers |
+|---|---|
+| Access: Organizations, Identity Providers, and Groups → Edit | `organization`, identity providers, groups, signing keys |
+| Access: Apps and Policies → Edit | applications, policies, short-lived certificates |
+| Access: Service Tokens → Edit | service tokens |
+| Access: Mutual TLS Certificates → Edit | mTLS certificates and hostname settings |
+| Access: Custom Pages → Edit | custom pages |
+| Access: Tags → Edit | tags |
+| MCP Portals → Edit | MCP servers and portals |
+| Zero Trust → Edit | infrastructure targets |
+
+The API schema names the MCP permission, and the documentation of
+infrastructure targets only names Zero Trust → Edit, which covers all of
+Cloudflare One. The permissions page also lists finer ones, such as
+Access: Apps → Edit or Access: Groups → Edit.
+
+**3. Call the module:**
 
 ```hcl
 module "access" {
@@ -24,44 +65,23 @@ module "access" {
 
   account_id = "023e105f4ecef8ad9ca31a8372d0c353"
 
-  organization = {
-    name             = "example.cloudflareaccess.com"
-    auth_domain      = "example.cloudflareaccess.com"
-    session_duration = "24h"
-
-    deny_unmatched_requests                     = false
-    deny_unmatched_requests_exempted_zone_names = []
-  }
-
   access_identity_providers = {
     otp = { name = "One-time PIN", type = "onetimepin", config = {} }
-    entra = {
-      name = "Microsoft Entra ID"
-      type = "azureAD"
-      config = {
-        client_id      = "4f2b7c1e-9d3a-4e8b-a6c5-1b2d3e4f5a6b"
-        client_secret  = var.entra_client_secret
-        directory_id   = "9b2a1c3d-4e5f-6a7b-8c9d-0e1f2a3b4c5d"
-        support_groups = true
-      }
-    }
   }
 
   access_groups = {
     staff = {
       name    = "Staff"
       include = [{ email_domain = { domain = "example.com" } }]
-      require = [{ login_method = { id = module.access.access_identity_provider_ids["entra"] } }]
+      require = [{ login_method = { id = module.access.access_identity_provider_ids["otp"] } }]
     }
   }
 
   access_policies = {
     staff = {
-      name             = "Staff"
-      decision         = "allow"
-      include          = [{ group = { id = module.access.access_group_ids["staff"] } }]
-      exclude          = [{ geo = { country_code = "KP" } }]
-      session_duration = "8h"
+      name     = "Staff"
+      decision = "allow"
+      include  = [{ group = { id = module.access.access_group_ids["staff"] } }]
     }
   }
 
@@ -76,37 +96,824 @@ module "access" {
 }
 ```
 
-Adopt the organization with an `import` block before the first apply, see
-[Organization](#organization). Keep secrets such as `client_secret` out of
-versioned files: pass them through a sensitive variable, as above. Objects of
-the module refer to each other through its outputs, see
-[Refer to other objects](#refer-to-other-objects).
+Find `account_id` in the dashboard, under **API** on a domain's **Overview**
+page, or search "Copy account ID" from Account home.
 
-See the [repository README](../README.md#usage) for the SSH form of the
-source and the versioning rules.
+**4. Apply, then check the token at the origin.** Access only sees the
+requests that reach Cloudflare: `wiki.example.com` must be a proxied record of
+a zone in the account, or the public hostname of a tunnel. The origin can
+check the `aud` claim of each request's Access token against the
+`access_application_auds` output.
 
-## Requirements
+> [!TIP]
+> The module comes from Git, with a release tag in `ref`, see the
+> [repository README](../README.md#usage). It is not on the Terraform Registry
+> yet.
 
-| | Version | Checked with |
-|---|---|---|
-| Terraform | `>= 1.3`, the first with optional object attributes | 1.3.10 and 1.16.5 |
-| Provider [`cloudflare/cloudflare`](https://registry.terraform.io/providers/cloudflare/cloudflare/latest) | `~> 5.28`, which renamed `mfa_ssh_piv_key_requirements` of the organization to `mfa_piv_key_requirements` | 5.28.0 |
+More in the examples: [basic](examples/basic) (a policy and an application),
+[complete](examples/complete) (every input) and [import](examples/import) (an
+existing setup brought under Terraform without changing it).
 
-The `import` blocks of this README need Terraform 1.5 or later; before,
-run `terraform import` with the same address and ID. The
-[import example](examples/import) needs Terraform 1.7 or later. The provider
-reads its API token from the `CLOUDFLARE_API_TOKEN` environment variable.
+### How it works
 
-## Organization
+The module works at the account level: Access objects attached to a zone are
+not covered. Each input drives one provider resource, one per entry of a map.
+Leave an input out, and the module creates nothing for it; leave a singleton out
+(`organization`, `access_key_configuration`, `access_mtls_hostname_settings`),
+and the module leaves that setting of the account alone.
+
+Objects refer to each other through the module's outputs, such as
+`group = { id = module.access.access_group_ids["staff"] }`: the attribute
+keeps the provider's meaning, an ID, whether the object lives in this module
+block or elsewhere. An arrow goes from an object to those that can refer to
+it in the same block:
+
+```mermaid
+flowchart LR
+    idp["identity providers"] --> groups["groups"]
+    idp --> apps
+    groups --> policies["reusable policies"]
+    tokens["service tokens"] --> policies
+    policies --> apps["applications"]
+    tags["tags"] --> apps
+    pages["custom pages"] --> apps
+    pages --> org["organization"]
+    servers["MCP servers"] --> apps
+    servers --> portals["MCP portals"]
+    apps --> ssh["short-lived certificates"]
+    targets["infrastructure targets"] -. "matched by hostname or tags" .-> apps
+
+    classDef access fill:#F38020,stroke:#F38020,color:#fff
+    class apps,policies access
+```
+
+Two consequences, both from how Terraform orders the work, by input and by
+output rather than by entry:
+
+- **An object cannot refer to an object of the same kind in the same block**,
+  such as a group inside a group, nor two kinds to each other, such as a
+  policy with a `linked_app_token` rule toward an application of the block,
+  when applications of the block refer to its policies. Terraform reports a
+  cycle. Declare the inner object in a second module block, see
+  [Split objects into two blocks](#split-objects-into-two-blocks).
+- **Every entry of an input waits for every object behind each output its
+  entries refer to.** When one of them fails, Terraform creates none of these
+  entries: a refused custom page holds back every application, even those
+  without it, and a refused application every short-lived certificate.
+
+### Why a module
+
+Cloudflare's [Terraform best practices](https://developers.cloudflare.com/terraform/advanced-topics/best-practices/#avoid-modules-or-use-them-sparingly)
+advise to avoid modules, or to use them sparingly: a module that hides
+resources behind its own logic can change them in ways its caller does not
+see, and adds its own bugs to those of Terraform and the provider. This one
+has no logic of its own. Each entry is one provider resource, with the
+provider's attributes, nothing computed or defaulted on the way, and the plan
+shows the provider's resources as they are, under `module.access`. What the
+module adds is the typing of every attribute, the references between
+objects, and what this README records of the API.
+
+## Inputs
+
+| Input | Type | Default | Description |
+|---|---|---|---|
+| `account_id` | `string` | **required** | the account that owns the Zero Trust organization |
+| `organization` | `object` | `null` | settings of the organization, see [Organization](#organization) |
+| `access_identity_providers` | `map(object)` | `{}` | how users log in, see [Identity providers](#identity-providers) |
+| `access_groups` | `map(object)` | `{}` | reusable sets of rules, see [Groups and policies](#groups-and-policies) |
+| `access_policies` | `map(object)` | `{}` | reusable policies, see [Groups and policies](#groups-and-policies) |
+| `access_applications` | `map(object)` | `{}` | what Access protects, 14 types, see [Applications](#applications) |
+| `access_service_tokens` | `map(object)` | `{}` | credentials for machines, see [Service tokens](#service-tokens) |
+| `access_mtls_certificates` | `map(object)` | `{}` | CAs of client certificates, paid plans, see [mTLS](#mtls) |
+| `access_mtls_hostname_settings` | `object` | `null` | mTLS settings of the account's hostnames, see [mTLS](#mtls) |
+| `access_short_lived_certificates` | `map(object)` | `{}` | SSH CAs of applications, see [Short-lived certificates](#short-lived-certificates) |
+| `access_tags` | `map(object)` | `{}` | tags of applications, see [Tags and custom pages](#tags-and-custom-pages) |
+| `access_custom_pages` | `map(object)` | `{}` | pages instead of Access's own, paid plans, see [Tags and custom pages](#tags-and-custom-pages) |
+| `access_key_configuration` | `object` | `null` | rotation of the signing keys, see [Signing keys](#signing-keys) |
+| `access_infrastructure_targets` | `map(object)` | `{}` | servers of `infrastructure` applications, see [Infrastructure targets](#infrastructure-targets) |
+| `access_ai_controls_mcp_servers` | `map(object)` | `{}` | MCP servers, see [MCP servers and portals](#mcp-servers-and-portals) |
+| `access_ai_controls_mcp_portals` | `map(object)` | `{}` | MCP portals, see [MCP servers and portals](#mcp-servers-and-portals) |
+
+The key of a map is yours and only names the object in the Terraform state:
+keep it stable, since [renaming it](#rename-a-key) replaces the object, with a
+new ID. Each block below shows the attributes an input takes, with what they
+do; the full type of every input is in the [Reference](#reference).
+Attributes keep their provider names, and whatever you leave out keeps
+Cloudflare's default, except in `organization`.
+
+> [!WARNING]
+> **A misspelled attribute is dropped without a word.** Terraform discards
+> the attributes an input does not declare: `sesion_duration = "8h"` leaves
+> the default duration, and the plan shows no error. Check the names against
+> the blocks on this page.
+
+> [!NOTE]
+> **Secrets go through sensitive variables**: `config.client_secret` of an
+> identity provider, `scim_config.authentication` of an application,
+> `auth_credentials` and `client_secret` of an MCP server. Never write them in
+> a versioned file. Mark the variable that holds the secret, not the input:
+> an input wrapped in `sensitive()` fails with "Invalid for_each argument".
+> The provider masks them in the plan, but the state holds them in clear, as
+> it holds the secrets Cloudflare generates: protect the backend.
+
+### Organization
 
 `organization` holds the settings of the account's Zero Trust organization.
-When it is `null`, the module leaves the organization alone.
+Leave it out, and the module leaves the organization alone. Set it, and the
+module owns every setting: a setting left out goes to `null`, or to `false`
+for the five booleans so marked.
 
-Terraform does not create the organization: create it in the Zero Trust
-dashboard, which also picks the team name. The provider's create updates the
-existing organization, and its destroy only drops it from the state: removing
-`organization` leaves the last values applied. Both warn about "Resource
-Destruction Considerations"; the warning is harmless.
+```hcl
+organization = {
+  # Write them as Cloudflare has them: <team>.cloudflareaccess.com.
+  name        = "example.cloudflareaccess.com"
+  auth_domain = "example.cloudflareaccess.com"
+
+  session_duration                   = "24h"   # lifetime of the tokens Access issues for applications
+  warp_auth_session_duration         = "24h"   # the same, for users authenticated through WARP
+  user_seat_expiration_inactive_time = "730h"  # a seat inactive that long is freed
+
+  # Sent as false when left out.
+  allow_authenticate_via_warp = false  # users reach every application with their WARP session
+  auto_redirect_to_identity   = false  # skip the choice of identity provider at login
+  is_ui_read_only             = false  # lock the settings in the dashboard: API and Terraform only
+  mfa_required_for_all_apps   = false  # apply mfa_config below to every application by default
+  warp_auth_non_browser_401   = false  # answer 401, not the login page, to non-browser WARP requests
+
+  # An organization at its defaults returns these: write them.
+  deny_unmatched_requests                     = false  # true denies hostnames without an application
+  deny_unmatched_requests_exempted_zone_names = []     # zones exempt from it
+
+  # Kept when left out.
+  mfa_configuration_allowed  = true                    # applications and policies may set their own MFA
+  strict_service_token_auth  = true                    # 401 or 403, and an audit log, for a bad service token
+  ui_read_only_toggle_reason = "Managed by Terraform"  # why is_ui_read_only changed
+
+  login_design = {
+    background_color = "#1e293b"
+    text_color       = "#ffffff"
+    header_text      = "Example"
+    footer_text      = "For Example staff only"
+    logo_path        = "https://www.example.com/logo.png"
+  }
+
+  # Custom pages, paid plans: see Tags and custom pages.
+  custom_pages = {
+    identity_denied = module.access.access_custom_page_ids["identity_denied"]  # after a failed identity rule
+    forbidden       = module.access.access_custom_page_ids["forbidden"]        # after a failed non-identity rule
+  }
+
+  # Independent MFA, which policies and applications need for their own mfa_config.
+  mfa_config = {
+    allowed_authenticators        = ["totp", "biometrics", "security_key"]
+    session_duration              = "24h"   # how often users go through MFA again
+    amr_matching_session_duration = "12h"   # skip MFA when the identity provider already did it
+    # required_aaguids            = "..."   # a list of the FIDO2 authenticators allowed
+  }
+  mfa_piv_key_requirements = {              # hardware keys, for infrastructure applications
+    pin_policy          = "once"            # never, once or always
+    touch_policy        = "always"          # never, always or cached
+    require_fips_device = true
+    ssh_key_type        = ["ecdsa", "ed25519"]
+    ssh_key_size        = [256, 384]
+  }
+
+  # Unused service tokens: disable or delete them after some days.
+  service_token_inactivity = { enabled = true, action = "disable", inactivity_threshold_days = 90 }
+}
+```
+
+Terraform does not create the organization: its create updates the existing
+one, and its destroy only drops it from the state. Removing `organization`
+leaves the last values applied. Both warn about "Resource Destruction
+Considerations"; the warning is harmless. Adopt the organization with an
+import before the first apply, see
+[Adopt the organization](#adopt-the-organization).
+
+`mfa_config` turns on independent MFA, with at least one authenticator. Without
+it, Cloudflare refuses every policy and application that sets `mfa_config`,
+even `{ mfa_disabled = true }` alone: "organization must have at least one
+allowed authenticator configured when apps or policies have mfa_config".
+
+### Identity providers
+
+```hcl
+access_identity_providers = {
+  entra = {
+    name = "Microsoft Entra ID"  # required: shown on the login page
+    type = "azureAD"             # required: see the table below. Changing it replaces the provider
+
+    config = {                   # required: the fields of this type, {} for a one-time PIN
+      client_id      = "4f2b7c1e-9d3a-4e8b-a6c5-1b2d3e4f5a6b"
+      client_secret  = var.entra_client_secret  # sensitive, never returned by Cloudflare
+      directory_id   = "9b2a1c3d-4e5f-6a7b-8c9d-0e1f2a3b4c5d"
+      support_groups = true      # load the user's groups, for the azure_ad selector
+    }
+
+    scim_config = {
+      enabled                  = true         # Cloudflare generates a SCIM URL and secret, see below
+      user_deprovision         = true         # revoke the sessions of a user removed in the IdP
+      seat_deprovision         = true         # and free their seat; needs user_deprovision
+      identity_update_behavior = "automatic"  # how a SCIM event updates the identity policies see
+    }
+
+    read_only = false  # true: the API can no longer change or delete it
+    # saml_certificate_set_id = "..."  # SAML: the certificate set that encrypts assertions
+  }
+}
+```
+
+`type` takes `onetimepin`, `azureAD`, `saml`, `centrify`, `facebook`,
+`github`, `google-apps`, `google`, `linkedin`, `oidc`, `okta`, `onelogin`,
+`pingone`, `yandex`, `cloudflare` or `passkeys`. `config` gathers the fields
+of every type: set those of yours, listed in Cloudflare's
+[identity provider guides](https://developers.cloudflare.com/cloudflare-one/identity/idp-integration/).
+The provider refuses at plan, not at validate, these fields on another type:
+
+| `type` | Fields of `config` for this type only |
+|---|---|
+| `azureAD` | `directory_id`, `conditional_access_enabled`, `support_groups`, `prompt` |
+| `centrify` | `centrify_account`, `centrify_app_id` |
+| `google-apps` | `apps_domain` |
+| `oidc` | `auth_url`, `token_url`, `certs_url`, `scopes` |
+| `okta` | `okta_account`, `authorization_server_id` |
+| `onelogin` | `onelogin_account` |
+| `pingone` | `ping_env_id` |
+| `saml` | `issuer_url`, `sso_target_url`, `idp_public_certs`, `attributes`, `email_attribute_name`, `header_attributes`, `sign_request` |
+
+#### SCIM
+
+With `scim_config.enabled = true`, Cloudflare generates the SCIM secret. Give
+the identity provider `scim_base_url` and `secret`, from the sensitive output
+`access_identity_provider_scim_configs`, such as
+`module.access.access_identity_provider_scim_configs["entra"].secret`.
+
+Cloudflare returns the secret only when SCIM is first enabled, and the
+provider keeps it in the state. A provider imported with SCIM on has no
+secret there: refresh it through the API
+(`/access/identity_providers/<ID>/refresh_scim_secret`), as the provider
+documentation says, and give the new one to the identity provider.
+
+### Groups and policies
+
+A group is a reusable set of rules; a policy decides what happens to the
+users its rules match. Applications refer to policies, policies to groups.
+
+```hcl
+access_groups = {
+  staff = {
+    name    = "Staff"                                          # required
+    include = [{ email_domain = { domain = "example.com" } }]  # required: match at least one rule
+    require = [{ login_method = { id = module.access.access_identity_provider_ids["entra"] } }]  # match every rule
+    exclude = [{ geo = { country_code = "KP" } }]               # match none
+    # is_default = true                                        # never read back, see Watch out
+  }
+}
+
+access_policies = {
+  staff = {
+    name     = "Staff"  # required
+    decision = "allow"  # required: allow, deny, non_identity (service tokens) or bypass
+    include  = [{ group = { id = module.access.access_group_ids["staff"] } }]
+    exclude  = [{ geo = { country_code = "KP" } }]
+    # require = [ ... ]
+
+    session_duration = "8h"  # lifetime of the token of a user this policy lets in
+
+    # Ask an administrator, and a reason, at the start of each session.
+    approval_required              = true
+    approval_groups                = [{ approvals_needed = 1, email_addresses = ["it@example.com"] }]
+    purpose_justification_required = true
+    purpose_justification_prompt   = "Ticket number"
+
+    # mfa_config       = { allowed_authenticators = ["totp"], session_duration = "12h" }  # needs organization.mfa_config
+    # isolation_required = true  # needs Cloudflare Browser Isolation on the account
+    # connection_rules   = { rdp = { allowed_clipboard_local_to_remote_formats = ["text"] } }  # RDP applications
+  }
+}
+```
+
+A user must match at least one rule of `include`, every rule of `require`,
+and no rule of `exclude`. Each rule sets a single selector: the provider
+refuses a rule with two at plan. `everyone`, `any_valid_service_token` and
+`certificate` take no value, as in `everyone = {}`. A group keeps the order
+of its rules; a policy does not. `non_identity` is the Service Auth decision,
+for machines.
+
+**The 26 selectors** of a rule, as Cloudflare's
+[Access selectors](https://developers.cloudflare.com/cloudflare-one/access-controls/policies/#selectors)
+describe them. The last column marks those that Cloudflare's documentation
+lists for the policies of an `infrastructure` application, see
+[Policies of an application](#policies-of-an-application):
+
+| Selector | Fields | Matches | Infrastructure |
+|---|---|---|---|
+| `email` | `email` | one email address | ✅ |
+| `email_domain` | `domain` | emails ending in this domain | ✅ |
+| `email_list` | `id` | the emails of a Zero Trust list | |
+| `everyone` | — | every user | |
+| `group` | `id` | the users of an Access group | |
+| `login_method` | `id` | users who logged in with this identity provider | |
+| `auth_method` | `auth_method` | the MFA method the identity provider reports, such as `mfa` or `hwk` | ✅ |
+| `azure_ad` | `id`, `identity_provider_id` | an Entra ID group | ✅ |
+| `github_organization` | `name`, `identity_provider_id`, `team` | a GitHub organization or team | ✅ |
+| `gsuite` | `email`, `identity_provider_id` | a Google Workspace group | ✅ |
+| `okta` | `name`, `identity_provider_id` | an Okta group | ✅ |
+| `saml` | `attribute_name`, `attribute_value`, `identity_provider_id` | a SAML attribute | ✅ |
+| `oidc` | `claim_name`, `claim_value`, `identity_provider_id` | an OIDC claim | |
+| `auth_context` | `ac_id`, `id`, `identity_provider_id` | an Entra ID authentication context | |
+| `cloudflare_account_member` | `account_id`, optional | members of a Cloudflare account, this one by default | |
+| `user_risk_score` | `user_risk_score` | a risk score, Enterprise plans | |
+| `external_evaluation` | `evaluate_url`, `keys_url` | the answer of your own API | |
+| `geo` | `country_code` | the country of the IP address | ✅ |
+| `ip` | `ip` | an IP range | |
+| `ip_list` | `id` | the IPs of a Zero Trust list | |
+| `device_posture` | `integration_uid` | a device posture rule that passed | ✅ |
+| `certificate` | — | any valid client certificate, see [mTLS](#mtls) | |
+| `common_name` | `common_name` | a client certificate with this common name | |
+| `service_token` | `token_id` | one service token, with `non_identity` | |
+| `any_valid_service_token` | — | any service token of the account, with `non_identity` | |
+| `linked_app_token` | `app_uid` | an OAuth token an application issued, with `non_identity` | |
+
+`device_posture` takes the ID of a device posture **rule**
+(`cloudflare_zero_trust_device_posture_rule`), despite its name and the
+provider's description, which speak of an integration. Cloudflare accepts any
+ID there without checking it.
+
+`isolation_required = true` needs
+[Cloudflare Browser Isolation](https://developers.cloudflare.com/cloudflare-one/access-controls/policies/isolate-application/)
+on the account. An account without it refuses the policy: "missing required
+permission to enable isolation_required".
+
+### Applications
+
+```hcl
+access_applications = {
+  wiki = {
+    name = "Wiki"         # shown to users
+    type = "self_hosted"  # see the table below; set it, or type-specific attributes fail
+
+    destinations = [{ type = "public", uri = "wiki.example.com" }]  # what it protects, see below
+    # domain     = "wiki.example.com"  # left out: the first public destination
+
+    policies = [  # by ascending precedence, see Policies of an application
+      { id = module.access.access_policy_ids["staff"], precedence = 1 },
+      { id = module.access.access_policy_ids["contractors"], precedence = 2 },
+    ]
+
+    allowed_idps              = [module.access.access_identity_provider_ids["entra"]]  # default: all
+    auto_redirect_to_identity = true   # skip the choice of identity provider; needs one in allowed_idps
+    session_duration          = "24h"  # lifetime of the application token
+    app_launcher_visible      = true   # show it in the App Launcher
+    logo_url                  = "https://www.example.com/wiki.svg"
+    tags                      = [module.access.access_tag_ids["engineering"]]  # by name, see Tags
+
+    # When access is denied.
+    custom_deny_message          = "Ask the IT team"  # none of ,.!:@?-
+    custom_deny_url              = "https://www.example.com/denied"
+    custom_non_identity_deny_url = "https://www.example.com/denied-device"
+    custom_pages                 = [module.access.access_custom_page_ids["identity_denied"]]  # paid plans
+
+    # Cookies and HTTP.
+    enable_binding_cookie      = false     # bind the token to the browser, against stolen tokens
+    http_only_cookie_attribute = true      # HttpOnly cookie, against XSS
+    same_site_cookie_attribute = "lax"     # SameSite cookie, against CSRF
+    path_cookie_attribute      = false     # scope the token to the application path
+    allow_iframe               = false
+    skip_interstitial          = false     # automatic authentication through cloudflared
+    service_auth_401_redirect  = true      # 401 when a Service Auth policy blocks the request
+    options_preflight_bypass   = false     # let CORS preflight requests through; not with cors_headers
+    # cors_headers = { allowed_origins = ["https://www.example.com"], allowed_methods = ["GET"], allow_credentials = true, max_age = 600 }
+    # read_service_tokens_from_header = "Authorization"  # a service token in one header
+
+    allow_authenticate_via_warp = true  # let WARP-authenticated users in; overrides the organization
+    # mfa_config = { allowed_authenticators = ["security_key"], session_duration = "12h" }  # needs organization.mfa_config
+
+    # oauth_configuration = { ... }  # Access as the OAuth server of the application, in beta
+  }
+}
+```
+
+**The 14 types** are `self_hosted`, `saas`, `ssh`, `vnc`, `rdp`,
+`app_launcher`, `warp`, `biso`, `bookmark`, `dash_sso`, `infrastructure`,
+`mcp`, `mcp_portal` and `proxy_endpoint`. Many attributes belong to a few
+types, and the provider refuses them at plan, not at validate, when `type` is
+another one or is left out:
+
+| Attribute | Types |
+|---|---|
+| `saas_app`, required for these types | `saas`, `dash_sso` |
+| `destinations` | `self_hosted`, `ssh`, `vnc`, `rdp`, `mcp_portal`, `mcp` |
+| `allow_iframe`, `cors_headers`, `enable_binding_cookie`, `http_only_cookie_attribute`, `options_preflight_bypass`, `path_cookie_attribute`, `read_service_tokens_from_header`, `same_site_cookie_attribute`, `service_auth_401_redirect`, `skip_interstitial` | `self_hosted`, `ssh`, `vnc`, `rdp`, `mcp_portal` |
+| `mfa_config` | `self_hosted`, `ssh`, `vnc`, `rdp` |
+| `allow_authenticate_via_warp` | `self_hosted`, `ssh`, `vnc`, `rdp`, `saas`, `dash_sso` |
+| `app_launcher_visible` | `self_hosted`, `ssh`, `vnc`, `rdp`, `saas`, `bookmark` |
+| `target_criteria` | `rdp`, `infrastructure` |
+| `app_launcher_logo_url`, `bg_color`, `footer_links`, `header_bg_color`, `landing_page_design`, `skip_app_launcher_login_page` | `app_launcher` |
+| `session_duration` | every type but `biso` and `bookmark` |
+
+**`destinations`** lists what the application protects: public hostnames and
+paths (`uri`, with wildcards), private networks (`cidr` or `hostname`, with
+`port_range`, `l4_protocol` and the `vnet_id` of a virtual network), Workers
+(`worker_id`) and, for an `mcp` application, MCP servers (`mcp_server_id`).
+`type` defaults to `public`. The Free plan accepts private destinations.
+`self_hosted_domains`, deprecated in favor of `destinations`, is left out of
+the module.
+
+#### Policies of an application
+
+`policies` lists the policies that Access applies to the application, by
+ascending `precedence`, unique within the application. The provider numbers
+an entry without `precedence` after the previous one. Leaving `policies` out
+sends an empty list: the application keeps no policy.
+
+Every type but `infrastructure` takes reusable policies, by ID, as above.
+An `infrastructure` application only takes policies written inside it, with
+the rules of `access_policies` and the Unix users that may connect in
+`connection_rules.ssh`. Cloudflare's API offers no reference for this type,
+reusable policies have no `connection_rules.ssh`, and the provider refuses a
+reference at plan: "connection_rules has to be set if type is
+infrastructure".
+
+```hcl
+access_applications = {
+  databases = {
+    name = "Databases"
+    type = "infrastructure"
+    target_criteria = [{
+      port     = 22
+      protocol = "SSH"
+      include  = { tags = { environment = ["production"] } }  # or target_attributes = { hostname = [...] }
+      # require = { ... }, exclude = { ... }
+    }]
+    policies = [{
+      name             = "SRE"
+      decision         = "allow"  # the only decision of this type
+      include          = [{ email = { email = "sre@example.com" } }]
+      connection_rules = { ssh = { usernames = ["root"], allow_email_alias = false } }
+    }]
+  }
+}
+```
+
+These policies take only some selectors, marked in the
+[selectors table](#groups-and-policies). Cloudflare refuses the others, an
+Access group included: "rule type 'group' not supported by infrastructure
+apps" (code 12130).
+
+For the other types, Cloudflare calls a policy written inside an application
+legacy: its documentation says that one cannot be added to a new application,
+though the API still accepts it. Write reusable policies there. Cloudflare's
+API describes reusable and written policies as mutually exclusive within an
+application.
+
+`target_criteria` selects the targets of an `infrastructure` or `rdp`
+application, by `target_attributes.hostname` or by `tags`, in `include`, with
+optional `require` and `exclude`, the rule format of provider 5.28. The
+provider describes the top-level `target_attributes` map as deprecated,
+without flagging it: it remains for applications that still use it, and
+cannot be combined with the rule format.
+
+#### SaaS applications
+
+```hcl
+access_applications = {
+  crm = {
+    name = "CRM"
+    type = "saas"
+    saas_app = {
+      auth_type     = "oidc"  # or saml, the default
+      redirect_uris = ["https://crm.example.net/oauth/callback"]
+      grant_types   = ["authorization_code"]
+      scopes        = ["openid", "email", "profile"]
+      # SAML instead: sp_entity_id, consumer_service_url, name_id_format = "email", custom_attributes...
+    }
+    policies = [{ id = module.access.access_policy_ids["staff"] }]
+  }
+}
+```
+
+The sensitive output `access_application_saas_apps` gives what Cloudflare
+generates: `client_id`, `client_secret` and `public_key` for OIDC, where
+`client_id` equals the AUD; `idp_entity_id`, `sso_endpoint` and `public_key`
+for SAML. Cloudflare returns `client_secret` only at creation, and the
+provider keeps it in the state: an application imported has none.
+
+`scim_config` provisions users to the application by SCIM, which Cloudflare
+describes as a closed beta: `idp_uid`, `remote_uri`, `authentication`,
+`mappings`. A rule `linked_app_token` accepts the OAuth tokens an OIDC SaaS
+application issues, by its ID.
+
+### Service tokens
+
+A service token lets a machine through Access: it sends the
+`CF-Access-Client-Id` and `CF-Access-Client-Secret` headers, from the outputs
+`access_service_token_client_ids` and `access_service_token_client_secrets`
+(sensitive). Its application needs a policy with the decision `non_identity`
+and a rule `service_token`, or `any_valid_service_token = {}` for every
+token of the account.
+
+```hcl
+access_service_tokens = {
+  ci = {
+    name     = "CI"     # required
+    duration = "8760h"  # default 8760h (one year); forever never expires
+    enabled  = true     # false: both secrets stop working, the token stays
+
+    # Rotation, see Rotate a service token secret.
+    # client_secret_version             = 2
+    # previous_client_secret_expires_at = "2026-11-01T00:00:00Z"
+  }
+}
+
+access_policies = {
+  ci = {
+    name     = "CI"
+    decision = "non_identity"
+    include  = [{ service_token = { token_id = module.access.access_service_token_ids["ci"] } }]
+  }
+}
+```
+
+A token expires after `duration`. Terraform does not renew it, and its plan
+shows nothing as the date nears; Cloudflare's notification "Expiring Access
+Service Token" warns a week before. Every update of a token, a rename
+included, sets its expiration again to `duration` from the time of the
+update: the provider sends `duration` with each update. Cloudflare returns
+the secret only at creation and at rotation, and the provider keeps it in the
+state.
+
+### mTLS
+
+```hcl
+access_mtls_certificates = {
+  corporate = {
+    name                 = "Corporate CA"           # required
+    certificate          = var.client_ca_certificate  # required: the CA in PEM, with its chain
+    associated_hostnames = ["api.example.com"]      # applications that ask for a client certificate
+  }
+}
+
+# The whole list of the account: list every hostname.
+access_mtls_hostname_settings = {
+  settings = [{
+    hostname                      = "api.example.com"
+    client_certificate_forwarding = true   # Cf-Client-Cert-Der-Base64 and Cf-Client-Cert-Sha256 headers to the origin
+    china_network                 = false  # also in China, on a zone with the China Network
+  }]
+}
+```
+
+The policies of these applications accept a certificate with the rule
+`certificate = {}`, or `common_name`. See Cloudflare's
+[mutual TLS guide](https://developers.cloudflare.com/cloudflare-one/access-controls/service-credentials/mutual-tls-authentication/)
+for the requirements on the CA. Changing `certificate` replaces the
+certificate. To destroy one, the provider first empties its
+`associated_hostnames`.
+
+mTLS certificates need a pay-as-you-go or Enterprise plan. On the Free plan,
+Cloudflare refuses a certificate, even on an account that has none: "maximum
+number of certificates has been reached" (code 12130). They are tested with
+mocks and a local copy of the API only.
+
+#### Hostname settings
+
+`access_mtls_hostname_settings` is a setting of the account. Leave it out,
+and the module leaves it alone. The provider's create updates the existing
+list, and its destroy only drops it from the state: removing it leaves the
+last settings applied, with the harmless "Resource Destruction
+Considerations" warning. The provider never reads `settings` back: a change
+made outside Terraform does not show in the plan. The Free plan accepts the
+list, tried empty only.
+
+### Short-lived certificates
+
+Each entry creates the SSH certificate authority of an application. Access
+signs short-lived certificates for its users, and the SSH server trusts them
+through the CA's public key, from the output
+`access_short_lived_certificate_public_keys`, in `TrustedUserCAKeys`.
+
+```hcl
+access_short_lived_certificates = {
+  ssh = { app_id = module.access.access_application_ids["ssh"] }  # changing it replaces the CA and its key
+}
+```
+
+Cloudflare calls this setup legacy, and recommends `infrastructure`
+applications for new SSH deployments.
+
+### Tags and custom pages
+
+```hcl
+access_tags = {
+  hr = { name = "Human Resources" }  # also the tag's ID: renaming it replaces the tag
+}
+
+access_custom_pages = {
+  identity_denied = {
+    name             = "Identity denied"
+    type             = "identity_denied"  # identity_denied, forbidden, login or interstitial
+    custom_html      = "<html><body><h1>Access denied</h1></body></html>"
+    contract_version = 1                  # a Liquid template Cloudflare sanitizes; left out: served as written
+  }
+}
+```
+
+An application takes up to 25 tags in `tags`, by name, and users filter the
+App Launcher by them. Cloudflare refuses an application with a tag that does
+not exist yet: "tags must be created before assigning to an application"
+(code 12130). Refer to a tag of the same block through `access_tag_ids`, as
+in [Applications](#applications), so that Terraform creates it first.
+
+A custom page replaces Access's own page: `identity_denied` is shown to a
+user who fails an identity rule, after login; `forbidden` to a user who fails
+a non-identity rule, such as a country or a device posture, before login.
+The API also accepts `login` and `interstitial`, which Cloudflare's
+documentation does not describe. An application refers to its pages in
+`custom_pages`, the organization in `custom_pages.identity_denied` and
+`custom_pages.forbidden`, through `access_custom_page_ids`.
+
+Custom pages need a pay-as-you-go or Enterprise plan. On the Free plan,
+Cloudflare refuses a page: "account does not have permission for custom
+pages" (HTTP 403, code 12133). While one fails, Terraform creates none of the
+applications, see [How it works](#how-it-works). They are tested with mocks
+only.
+
+### Signing keys
+
+```hcl
+access_key_configuration = { key_rotation_interval_days = 42 }  # 21 to 365, checked at plan
+```
+
+Cloudflare rotates the keys that sign Access tokens every 42 days by default.
+Leave the input out, and the module leaves the setting alone; removing it
+leaves the last interval applied. Origins that check the signature of the
+token must fetch the keys from
+`https://<team>.cloudflareaccess.com/cdn-cgi/access/certs` rather than pin
+them: Cloudflare keeps the previous key valid for 7 days after a rotation.
+Terraform does not rotate the keys on demand: that is
+`POST /accounts/<account>/access/keys/rotate`.
+
+### Infrastructure targets
+
+A target is a server that `infrastructure` applications reach over SSH.
+
+```hcl
+access_infrastructure_targets = {
+  db1 = {
+    hostname = "db-1"  # required: names the target for Access only, not resolved, not unique
+    ip = {             # required: IPv4, IPv6 or both
+      ipv4 = { ip_addr = "10.0.0.11", virtual_network_id = var.virtual_network_id }  # left out: the default network
+      # ipv6 = { ip_addr = "fd00::11" }
+    }
+    tags = { environment = "production" }  # one value per key, matched by target_criteria
+  }
+}
+```
+
+An address belongs to one target only within a virtual network. Cloudflare
+accepts an address that no tunnel route covers yet. `virtual_network_id`
+takes the ID of a virtual network, such as
+`cloudflare_zero_trust_tunnel_cloudflared_virtual_network.x.id`. These
+`tags` are not the Access tags above. An application selects its targets by
+`hostname` or `tags`, not by ID, so it does not depend on them.
+
+### MCP servers and portals
+
+An MCP server is reached over HTTP; a portal is a single MCP endpoint for
+several servers, on a hostname of the account.
+
+```hcl
+access_ai_controls_mcp_servers = {
+  docs = {
+    id        = "docs"                                # required, yours: prefixes its tools, use hyphens
+    name      = "Cloudflare docs"                     # required
+    hostname  = "https://docs.mcp.cloudflare.com/mcp" # required: the full URL of the endpoint
+    auth_type = "unauthenticated"                     # required: unauthenticated, bearer or oauth
+    # auth_credentials = var.mcp_token  # bearer: the token, or a JSON object of headers; sensitive
+    # client_secret    = var.mcp_secret # oauth with a client registered by hand; sensitive
+    description = "Product documentation"
+    # secure_web_gateway = true         # route its traffic through Gateway
+    # updated_tools   = [{ name = "delete_page", enabled = false }]  # hide or rename tools
+    # updated_prompts = [{ name = "summarize", alias = "digest" }]
+  }
+}
+
+access_ai_controls_mcp_portals = {
+  main = {
+    id       = "main"             # required, yours
+    name     = "MCP"              # required
+    hostname = "mcp.example.com"  # required: a hostname in a zone of the account
+    servers = [{
+      server_id        = module.access.access_ai_controls_mcp_server_ids["docs"]
+      on_behalf        = true   # default: each user authorizes with their own credentials
+      default_disabled = false  # true: off for clients until they turn it on
+    }]
+    code_mode = "opt_in"  # default; off, default_on or enforced
+  }
+}
+```
+
+`id` prefixes the name of each tool and prompt the server exposes through a
+portal, as `<id>_<tool>`. The portal splits that name at the first
+underscore: use hyphens in `id`, not underscores. Changing `id`, `auth_type`
+or `hostname` of a server, or `id` of a portal, replaces it. Cloudflare
+connects to a server when it creates it: a server it cannot reach is still
+created, in status `error`. Set `on_behalf = false` to use the server's admin
+credential, which service tokens need. `allow_code_mode`, deprecated, is left
+out of the module.
+
+Unlike the dashboard, the API creates neither the DNS record of the portal
+nor its Access applications: see [Publish an MCP portal](#publish-an-mcp-portal).
+The Free plan accepts servers, portals and their applications.
+
+## Outputs
+
+| Output | Use it for |
+|---|---|
+| `access_application_auds` | 👉 the origin: check the `aud` claim of the Access token |
+| `access_application_saas_apps` | 👉 the SaaS application: OIDC client or SAML endpoints, sensitive. See [SaaS applications](#saas-applications) |
+| `access_identity_provider_scim_configs` | 👉 the identity provider: SCIM URL and secret, sensitive. See [SCIM](#scim) |
+| `access_service_token_client_ids` | 👉 the machine: the `CF-Access-Client-Id` header |
+| `access_service_token_client_secrets` | 👉 the machine: the `CF-Access-Client-Secret` header, sensitive |
+| `access_short_lived_certificate_public_keys` | 👉 the SSH servers: `TrustedUserCAKeys` |
+| `access_identity_provider_ids` | rules `login_method`, `azure_ad`…, and `allowed_idps` of applications |
+| `access_group_ids` | rules `group` |
+| `access_policy_ids` | `policies` of applications |
+| `access_application_ids` | short-lived certificates, rules `linked_app_token` |
+| `access_service_token_ids` | rules `service_token` |
+| `access_tag_ids` | `tags` of applications: a tag's ID is its name |
+| `access_custom_page_ids` | `custom_pages` of applications and of the organization |
+| `access_ai_controls_mcp_server_ids` | `servers` of portals, `destinations` of `mcp` applications |
+| `access_mtls_certificate_ids` | the IDs of the mTLS certificates |
+| `access_infrastructure_target_ids` | the IDs of the targets |
+
+Each output is a map by key of its input. The CAs of short-lived certificates
+have no ID output, since their ID is the application's, nor do MCP portals,
+whose ID is the `id` you give.
+
+## Watch out
+
+**🔴 Can lock users out or break machines**
+
+- **The first apply of `organization` without an import** resets every
+  setting it leaves out, and its plan does not show it. See
+  [Adopt the organization](#adopt-the-organization).
+- **Renaming a key, or changing `type` of an identity provider**, replaces the
+  object, with a new ID: the AUD of an application changes, and origins that
+  check it refuse its users; a service token gets a new client ID and secret;
+  a short-lived certificate gets a new public key. Declare the move, see
+  [Rename a key](#rename-a-key).
+- **Leaving `policies` out of an application** sends an empty list: the
+  application keeps no policy.
+- **An `import` block on an mTLS certificate** plans to replace it, which
+  drops it from its hostnames: see
+  [Import an mTLS certificate](#import-an-mtls-certificate).
+- **`access_mtls_hostname_settings`** replaces the whole list of the account.
+- **Changing `account_id`** replaces every object of the module.
+
+**🟠 Surprises at apply**
+
+- **Paid features on the Free plan** fail: mTLS certificates and custom pages,
+  and while a page fails, every application of the block waits.
+- **A policy of an `infrastructure` application** refuses an Access group,
+  and most other selectors: see [Policies of an application](#policies-of-an-application).
+- **`mfa_config`** of a policy or an application fails without
+  `organization.mfa_config`; **`isolation_required`** without Browser
+  Isolation.
+- **`custom_deny_message`** fails with any of `,.!:@?-`.
+- **Every update of a service token**, a rename included, restarts its
+  expiration from `duration`.
+- **A misspelled attribute** is dropped without an error: see [Inputs](#inputs).
+
+**🟡 A change at every plan**
+
+- After an import, some values Cloudflare returns and a configuration leaves
+  out, and secrets it never returns: see
+  [Adopt an existing setup](#adopt-an-existing-setup).
+- `is_default` of a group, which the provider never reads back, shows as an
+  update after an import when you set it.
+
+**🔵 Harmless, good to know**
+
+- `organization`, `access_key_configuration` and
+  `access_mtls_hostname_settings` warn about "Resource Destruction
+  Considerations": removing them resets nothing.
+- The provider never reads `settings` of the hostname settings back: a change
+  made in the dashboard does not show in the plan.
+- An MCP server Cloudflare cannot reach is created anyway, in status `error`.
+
+**🐞 Known provider issues**, open on 17 October 2026, and what the tests of
+this module saw with provider 5.28.0:
+
+| Issue | Reported | Seen here |
+|---|---|---|
+| [#7120](https://github.com/cloudflare/terraform-provider-cloudflare/issues/7120) | An `mcp` application, imported, plans `enable_binding_cookie` and `options_preflight_bypass` to `null` at every plan (5.19.1). | After an import only, and one apply clears it, see [Adopt an existing setup](#adopt-an-existing-setup). |
+| [#7156](https://github.com/cloudflare/terraform-provider-cloudflare/issues/7156) | A policy reads back with extra empty `certificate = {}` rules, and `exclude = []` or `require = []` as `null`; an `app_launcher` application plans a `title` in `landing_page_design` (5.19.1). | Not seen: policies with `certificate = {}` and other selectors plan no change after creation. Not tried: empty lists, which you can leave out, and `app_launcher` on the API. |
+| [#7165](https://github.com/cloudflare/terraform-provider-cloudflare/issues/7165) | A policy plans an update at every plan, with no attribute shown, with `session_duration = ""` (5.19.1). | Not seen: the tests never set `session_duration = ""`. |
+| [#7238](https://github.com/cloudflare/terraform-provider-cloudflare/issues/7238) | An MCP server with `bearer` fails every apply after the first, "Provider produced inconsistent result after apply", its `status` going from `error` to `waiting` (5.21.1). | Not seen: a bearer server in status `error` was updated without an error. |
+
+## Guides
 
 ### Adopt the organization
 
@@ -127,126 +934,97 @@ import {
 
 Then copy into `organization` each value the plan sets to `null`. An
 organization left at its defaults returns `deny_unmatched_requests = false`
-and `deny_unmatched_requests_exempted_zone_names = []`: write them, as in
-[Usage](#usage). It also returns `service_token_inactivity` turned off, with
-`action` and `inactivity_threshold_days` empty, which the provider refuses as
-input since both are required. The plan then still shows
-`service_token_inactivity` going to `null`, and `mfa_configuration_allowed`
-as known after apply. Applying it leaves the organization as it was, and the
-next plan shows no change.
+and `deny_unmatched_requests_exempted_zone_names = []`: write them. It also
+returns `service_token_inactivity` turned off, with `action` and
+`inactivity_threshold_days` empty, which the provider refuses as input since
+both are required. The plan then still shows `service_token_inactivity`
+going to `null`, and `mfa_configuration_allowed` as known after apply.
+Applying it leaves the organization as it was, and the next plan shows no
+change.
 
-Once the organization is managed, the plan shows what each change sends: a
-setting removed from `organization` goes to `null`, or to `false` for the
-five booleans above. `mfa_configuration_allowed`,
-`strict_service_token_auth` and `ui_read_only_toggle_reason` are the
-exception: left out, they keep their value.
+### Adopt an existing setup
 
-## Identity providers
+To bring identity providers, groups, policies and applications under the
+module without changing them, follow the [import example](examples/import):
+`import` blocks, with each object looked up by name in the provider's data
+sources. For the other inputs, write an `import` block by hand, with the ID
+below. `import` blocks need Terraform 1.5 or later; before, run
+`terraform import` with the same address and ID.
 
-Each entry of `access_identity_providers` takes the attributes of
-[`cloudflare_zero_trust_access_identity_provider`](https://registry.terraform.io/providers/cloudflare/cloudflare/latest/docs/resources/zero_trust_access_identity_provider).
-`config` gathers the fields of every `type`: set those of yours, listed in
-Cloudflare's [identity provider guides](https://developers.cloudflare.com/cloudflare-one/identity/idp-integration/).
-A one-time PIN takes `config = {}`. The provider refuses at plan, not at
-validate, these fields on another type:
-
-| `type` | Fields of `config` for this type only |
-|---|---|
-| `azureAD` | `directory_id`, `conditional_access_enabled`, `support_groups`, `prompt` |
-| `centrify` | `centrify_account`, `centrify_app_id` |
-| `google-apps` | `apps_domain` |
-| `oidc` | `auth_url`, `token_url`, `certs_url`, `scopes` |
-| `okta` | `okta_account`, `authorization_server_id` |
-| `onelogin` | `onelogin_account` |
-| `pingone` | `ping_env_id` |
-| `saml` | `issuer_url`, `sso_target_url`, `idp_public_certs`, `attributes`, `email_attribute_name`, `header_attributes`, `sign_request` |
-
-Changing `type` replaces the provider, and so does renaming its key: its ID
-changes, and every group, policy or application that refers to it must
-follow. To rename a key, declare the move:
-
-```hcl
-moved {
-  from = module.access.cloudflare_zero_trust_access_identity_provider.this["old"]
-  to   = module.access.cloudflare_zero_trust_access_identity_provider.this["new"]
-}
-```
-
-### Import an identity provider
-
-Import a provider by its ID, prefixed with the account:
+| Input | Import ID | After the import, the plan shows |
+|---|---|---|
+| `organization` | `<account>` | `service_token_inactivity` to `null`, see [Adopt the organization](#adopt-the-organization) |
+| `access_identity_providers` | `accounts/<account>/<id>` | `client_secret` as an update, never returned. A one-time PIN set up from the dashboard can have `name = ""`; Entra ID returns `conditional_access_enabled = false`. No SCIM secret, see [SCIM](#scim) |
+| `access_groups` | `accounts/<account>/<id>` | no change |
+| `access_policies` | `<account>/<id>` | no change. Created in the dashboard: `session_duration = "24h"` |
+| `access_applications` | `accounts/<account>/<id>` | `false` returned for `auto_redirect_to_identity`, and `enable_binding_cookie` and `options_preflight_bypass` where the type takes them: write them. See below for `infrastructure` and `mcp` |
+| `access_service_tokens` | `accounts/<account>/<id>` | `client_secret_version` as an update, see below |
+| `access_mtls_certificates` | `accounts/<account>/<id>` | a replacement: see [Import an mTLS certificate](#import-an-mtls-certificate) |
+| `access_mtls_hostname_settings` | `accounts/<account>` | `settings` as an update, never read back |
+| `access_short_lived_certificates` | `accounts/<account>/<application id>` | no change |
+| `access_tags` | `<account>/<name>` | no change |
+| `access_custom_pages` | `<account>/<id>` | not checked: the Free plan refuses pages |
+| `access_key_configuration` | `<account>` | no change, once the interval is written |
+| `access_infrastructure_targets` | `<account>/<id>` | no change |
+| `access_ai_controls_mcp_servers` | `<account>/<id>` | `auth_credentials` and `client_secret` as an update, never returned |
+| `access_ai_controls_mcp_portals` | `<account>/<id>` | no change |
 
 ```hcl
 import {
-  to = module.access.cloudflare_zero_trust_access_identity_provider.this["otp"]
-  id = "accounts/023e105f4ecef8ad9ca31a8372d0c353/f174e90a-fafe-4643-bbbc-4a0ed4fc8415"
+  to = module.access.cloudflare_zero_trust_access_service_token.this["ci"]
+  id = "accounts/023e105f4ecef8ad9ca31a8372d0c353/3537a672-e4d8-4d89-aab9-26cb622918a1"
 }
 ```
 
-A one-time PIN set up from the dashboard can have an empty name: write
-`name = ""`, or the plan renames it. An Entra ID provider returns
-`conditional_access_enabled = false`: write it, or the plan sets it to `null`.
+One apply clears the changes the configuration cannot avoid, and the next
+plan shows no change:
 
-Cloudflare never returns `config.client_secret`. After an import, the plan
-shows the secret as an update: applying sends it again, and the next plan
-shows no change.
+- a secret Cloudflare never returns is sent again;
+- an `infrastructure` application: the provider keeps only the ID of each
+  policy at import, and this type refuses a reference. Applying sends the
+  policies again, and Cloudflare replaces each with an identical one under a
+  new ID;
+- an `mcp` application returns `enable_binding_cookie` and
+  `options_preflight_bypass`, which the provider refuses for this type:
+  applying sends them as `null`;
+- a service token: applying sends the version Cloudflare already has, which
+  does not rotate the secret, and the expiration starts over from
+  `duration`. Cloudflare does not return the secret of an imported token:
+  `access_service_token_client_secrets` gives `null` for it until the next
+  rotation. For a token rotated before, write its current
+  `client_secret_version`, which the API returns, with
+  `previous_client_secret_expires_at`.
 
-### SCIM
+An application with a legacy policy: refer to that policy by its ID, as to a
+reusable one. The plan then shows no change, and updates keep the policy and
+its ID. To manage it as a reusable policy instead, convert it with
+`PUT /accounts/<account>/access/apps/<app>/policies/<policy>/make_reusable`,
+then import it into `access_policies`.
 
-With `scim_config.enabled = true`, Cloudflare generates the SCIM secret. Give
-the identity provider `scim_base_url` and `secret`, from the sensitive output
-`access_identity_provider_scim_configs`, such as
-`module.access.access_identity_provider_scim_configs["entra"].secret`.
+### Import an mTLS certificate
 
-Cloudflare returns the secret only when SCIM is first enabled, and the
-provider keeps it in the state. A provider imported with SCIM on has no
-secret there: refresh it through the API
-(`/access/identity_providers/<ID>/refresh_scim_secret`), as the provider
-documentation says, and give the new one to the identity provider.
+The provider cannot read `certificate` back, and warns "MTLS certificate not
+imported": the plan of an `import` block then replaces the certificate, which
+drops it from its hostnames until the new one is created. Do not apply it.
+Import with the `terraform import` command instead, then add the PEM to the
+state by hand, exactly as the configuration gives it:
 
-## Groups and policies
-
-Each entry of `access_groups` takes the attributes of
-[`cloudflare_zero_trust_access_group`](https://registry.terraform.io/providers/cloudflare/cloudflare/latest/docs/resources/zero_trust_access_group),
-and each entry of `access_policies` those of
-[`cloudflare_zero_trust_access_policy`](https://registry.terraform.io/providers/cloudflare/cloudflare/latest/docs/resources/zero_trust_access_policy).
-Policies are reusable: applications refer to them by ID.
-
-Both take the same rules. A user must match at least one rule of `include`,
-every rule of `require`, and no rule of `exclude`. A group needs `include`.
-Each rule sets a single selector, among the 26 of the provider, listed in
-Cloudflare's [Access policy selectors](https://developers.cloudflare.com/cloudflare-one/access-controls/policies/#selectors):
-the provider refuses a rule with two at plan. `everyone`,
-`any_valid_service_token` and `certificate` take no value: write
-`everyone = {}`. A group keeps the order of its rules; a policy does not.
-
-```hcl
-include = [
-  { email_domain = { domain = "example.com" } },
-  { email = { email = "contractor@example.net" } },
-]
-exclude = [{ geo = { country_code = "KP" } }]
-require = [{ device_posture = { integration_uid = var.warp_posture_rule_id } }]
+```bash
+terraform import 'module.access.cloudflare_zero_trust_access_mtls_certificate.this["corp"]' accounts/023e105f4ecef8ad9ca31a8372d0c353/f174e90a-fafe-4643-bbbc-4a0ed4fc8415
+terraform state pull > state.json
+# In state.json, set the instance's attributes.certificate to the PEM,
+# and increment serial.
+terraform state push state.json
 ```
 
-`device_posture` takes the ID of a device posture rule
-(`cloudflare_zero_trust_device_posture_rule`), despite its name and the
-provider's description, which speak of an integration. Cloudflare accepts any
-ID there without checking it.
+The next plan shows no change. This was checked against a local copy of the
+API, since the Free plan refuses certificates.
 
-As for identity providers, renaming the key of a group or a policy replaces
-it: declare a `moved` block, see [Identity providers](#identity-providers).
+### Split objects into two blocks
 
-### Refer to other objects
-
-A rule refers to an object of the same module call through the module's
-outputs, such as `group = { id = module.access.access_group_ids["staff"] }` or
-`login_method = { id = module.access.access_identity_provider_ids["otp"] }`.
-
-A group cannot include another group of the same call this way: the output
-`access_group_ids` depends on every group, and Terraform reports a cycle.
-Declare the inner group in a second call of the module, which gives its ID
-through the same output:
+An object that refers to an object of the same kind, or two kinds that refer
+to each other, go in a second module block, which gives its IDs through the
+same outputs. A group inside a group:
 
 ```hcl
 module "access_base_groups" {
@@ -260,155 +1038,8 @@ module "access_base_groups" {
 ```
 
 and then `group = { id = module.access_base_groups.access_group_ids["sre"] }`
-in the groups of the main call.
-
-Terraform orders the work by input and by output, not by entry. Every entry
-of an input waits for every object behind each output that one of its
-entries refers to: when one of them fails, Terraform creates none of these
-entries. A refused custom page holds back every application, even those
-without it, and a refused application every short-lived certificate.
-
-### Policy settings
-
-`mfa_config` needs independent MFA turned on for the organization, with at
-least one authenticator in `organization.mfa_config.allowed_authenticators`.
-Otherwise Cloudflare refuses the policy, even with
-`mfa_config = { mfa_disabled = true }` alone: "organization must have at least
-one allowed authenticator configured when apps or policies have mfa_config".
-
-`isolation_required = true` needs
-[Cloudflare Browser Isolation](https://developers.cloudflare.com/cloudflare-one/access-controls/policies/isolate-application/)
-on the account. An account without it refuses the policy: "missing required
-permission to enable isolation_required".
-
-### Import a group or a policy
-
-The import IDs differ: a group is prefixed with `accounts/`, a policy is not.
-
-```hcl
-import {
-  to = module.access.cloudflare_zero_trust_access_group.this["staff"]
-  id = "accounts/023e105f4ecef8ad9ca31a8372d0c353/aa0a4aab-672b-4bdb-bc33-a59f1130a11f"
-}
-
-import {
-  to = module.access.cloudflare_zero_trust_access_policy.this["staff"]
-  id = "023e105f4ecef8ad9ca31a8372d0c353/f267e341-3a1b-4d2c-9e5f-6a7b8c9d0e1f"
-}
-```
-
-A policy created in the dashboard returns `session_duration = "24h"`: write
-it, or the plan sets it to `null`. The provider never reads `is_default` of a
-group back: after an import, the plan shows it as an update if you set it.
-
-## Applications
-
-Each entry of `access_applications` takes the attributes of
-[`cloudflare_zero_trust_access_application`](https://registry.terraform.io/providers/cloudflare/cloudflare/latest/docs/resources/zero_trust_access_application),
-but `self_hosted_domains`, deprecated in favor of `destinations`.
-
-Set `type`. Many attributes belong to a few types, and the provider refuses
-them at plan, not at validate, when `type` is another one or is left out:
-
-| Attribute | Types |
-|---|---|
-| `saas_app`, required for these types | `saas`, `dash_sso` |
-| `destinations` | `self_hosted`, `ssh`, `vnc`, `rdp`, `mcp_portal`, `mcp` |
-| `allow_iframe`, `cors_headers`, `enable_binding_cookie`, `http_only_cookie_attribute`, `options_preflight_bypass`, `path_cookie_attribute`, `read_service_tokens_from_header`, `same_site_cookie_attribute`, `service_auth_401_redirect`, `skip_interstitial` | `self_hosted`, `ssh`, `vnc`, `rdp`, `mcp_portal` |
-| `mfa_config` | `self_hosted`, `ssh`, `vnc`, `rdp` |
-| `allow_authenticate_via_warp` | `self_hosted`, `ssh`, `vnc`, `rdp`, `saas`, `dash_sso` |
-| `app_launcher_visible` | `self_hosted`, `ssh`, `vnc`, `rdp`, `saas`, `bookmark` |
-| `target_criteria` | `rdp`, `infrastructure` |
-| `app_launcher_logo_url`, `bg_color`, `footer_links`, `header_bg_color`, `landing_page_design`, `skip_app_launcher_login_page` | `app_launcher` |
-| `session_duration` | every type but `biso` and `bookmark` |
-
-`destinations` lists what the application protects: public hostnames and
-paths (`uri`), private networks (`cidr` or `hostname`, with `port_range`,
-`l4_protocol` and the `vnet_id` of a virtual network), Workers (`worker_id`)
-and, for an `mcp` application, MCP servers (`mcp_server_id`). `type` defaults
-to `public`. Left out, `domain` takes the first public destination. The Free
-plan accepts private destinations.
-
-Cloudflare refuses a `custom_deny_message` that contains any of `,.!:@?-`.
-
-`mfa_config` needs independent MFA turned on for the organization, as for
-policies, see [Policy settings](#policy-settings).
-
-As for identity providers, renaming the key of an application replaces it,
-with a new ID and a new AUD: declare a `moved` block, see
-[Identity providers](#identity-providers).
-
-### Policies of an application
-
-`policies` lists the policies that Access applies to the application, by
-ascending `precedence`, unique within the application. The provider numbers
-an entry without `precedence` after the previous one. Leaving `policies` out
-sends an empty list: the application keeps no policy.
-
-Every type but `infrastructure` takes reusable policies, by ID:
-
-```hcl
-policies = [
-  { id = module.access.access_policy_ids["staff"], precedence = 1 },
-  { id = module.access.access_policy_ids["contractors"], precedence = 2 },
-]
-```
-
-An `infrastructure` application only takes policies written inside it, with
-the rules of `access_policies` and the Unix users that may connect in
-`connection_rules.ssh`. Cloudflare's API offers no reference for this type,
-reusable policies have no `connection_rules.ssh`, and the provider refuses a
-reference at plan: "connection_rules has to be set if type is
-infrastructure".
-
-```hcl
-access_applications = {
-  databases = {
-    name = "Databases"
-    type = "infrastructure"
-    target_criteria = [{
-      port     = 22
-      protocol = "SSH"
-      include  = { target_attributes = { hostname = ["db-1", "db-2"] } }
-    }]
-    policies = [{
-      name             = "SRE"
-      decision         = "allow"
-      include          = [{ email = { email = "sre@example.com" } }]
-      connection_rules = { ssh = { usernames = ["root"] } }
-    }]
-  }
-}
-```
-
-These policies take only some of the selectors, listed in Cloudflare's
-[infrastructure policy selectors](https://developers.cloudflare.com/cloudflare-one/access-controls/applications/non-http/infrastructure-apps/#infrastructure-policy-selectors):
-`email`, `email_domain`, `saml`, `geo`, `auth_method`, `device_posture`,
-`azure_ad`, `github_organization`, `gsuite` and `okta`. Cloudflare refuses
-the others, an Access group included: "rule type 'group' not supported by
-infrastructure apps" (code 12130).
-
-For the other types, Cloudflare calls a policy written inside an application
-legacy: its documentation says that one cannot be added to a new application,
-though the API still accepts it. Write reusable policies there. Cloudflare's
-API describes reusable and written policies as mutually exclusive within an
-application.
-
-`target_criteria` selects the targets of an `infrastructure` or `rdp`
-application. Use the rule format of provider 5.28: `include`, with optional
-`require` and `exclude`, each by `target_attributes.hostname` or by `tags`.
-The provider describes the top-level `target_attributes` map as deprecated,
-without flagging it: it remains for applications that still use it, and
-cannot be combined with the rule format.
-
-### Linked application tokens
-
-A rule `linked_app_token` accepts the tokens that an application issues, such
-as an OIDC SaaS application, by the ID of that application. A policy with
-such a rule cannot refer to an application of the same call if applications
-of that call refer to the module's policies: `access_application_ids` and
-`access_policy_ids` then depend on each other, and Terraform reports a cycle.
-Declare that policy, and the applications that use it, in a second call:
+in the groups of the main block. A policy that accepts the tokens of an
+application of the main block, with the applications that use it:
 
 ```hcl
 module "access_api" {
@@ -434,86 +1065,60 @@ module "access_api" {
 }
 ```
 
-### Outputs of an application
+### Share values between applications
 
-The origin of an application checks the `aud` claim of the Access token
-against `access_application_auds`.
-
-The sensitive output `access_application_saas_apps` gives what Cloudflare
-generates for a `saas` application: `client_id`, `client_secret` and
-`public_key` for OIDC, where `client_id` equals the AUD; `idp_entity_id`,
-`sso_endpoint` and `public_key` for SAML. Cloudflare returns `client_secret`
-only at creation, and the provider keeps it in the state: an application
-imported has none.
-
-### Import an application
-
-Import an application by its ID, prefixed with `accounts/` and the account:
+The module has no defaults of its own. To give many applications the same
+values, merge them in your configuration: a value the application sets wins.
 
 ```hcl
-import {
-  to = module.access.cloudflare_zero_trust_access_application.this["wiki"]
-  id = "accounts/023e105f4ecef8ad9ca31a8372d0c353/8a52bbeb-8fe6-485c-b644-6b046f2ff283"
-}
-```
-
-After an import, the plan sets to `null` the booleans that Cloudflare returns
-as `false`, such as `auto_redirect_to_identity`, `enable_binding_cookie` and
-`options_preflight_bypass`: write them as `false`. An `mcp` application
-returns the last two as well, which the provider refuses for this type: the
-plan sets them to `null`, applying it sends them so, and the next plan shows
-no change.
-
-An application with a legacy policy: refer to that policy by its ID, as to a
-reusable one. The plan then shows no change, and updates keep the policy and
-its ID. To manage it as a reusable policy instead, convert it with
-`PUT /accounts/<account>/access/apps/<app>/policies/<policy>/make_reusable`,
-then import it into `access_policies`.
-
-An `infrastructure` application: the provider keeps only the ID of each
-policy at import, and this type refuses a reference, so the plan shows each
-policy as an update. Applying it sends the policies again: Cloudflare
-replaces each with an identical one under a new ID, and the next plan shows
-no change.
-
-## Service tokens
-
-Each entry of `access_service_tokens` takes the attributes of
-[`cloudflare_zero_trust_access_service_token`](https://registry.terraform.io/providers/cloudflare/cloudflare/latest/docs/resources/zero_trust_access_service_token).
-A service token lets a machine through Access: it sends the
-`CF-Access-Client-Id` and `CF-Access-Client-Secret` headers, from the outputs
-`access_service_token_client_ids` and `access_service_token_client_secrets`
-(sensitive). The application needs a policy with the decision `non_identity`
-(Service Auth) and a rule `service_token`, or `any_valid_service_token = {}`
-for every token of the account. A policy can refer to a token of the same call:
-
-```hcl
-access_service_tokens = {
-  ci = { name = "CI" }
+locals {
+  applications = {
+    wiki = { name = "Wiki", destinations = [{ uri = "wiki.example.com" }] }
+    jira = { name = "Jira", destinations = [{ uri = "jira.example.com" }] }
+  }
 }
 
-access_policies = {
-  ci = {
-    name     = "CI"
-    decision = "non_identity"
-    include  = [{ service_token = { token_id = module.access.access_service_token_ids["ci"] } }]
+module "access" {
+  # ...
+  access_applications = {
+    for key, app in local.applications : key => merge({
+      type                       = "self_hosted"
+      policies                   = [{ id = module.access.access_policy_ids["staff"] }]
+      session_duration           = "8h"
+      http_only_cookie_attribute = true
+    }, app)
   }
 }
 ```
 
-Cloudflare returns the secret only at creation and at rotation, and the
-provider keeps it in the state.
+### Keep the configuration in YAML
 
-### Expiration
+Each input takes the same map from a YAML file. A misspelled key is dropped
+there too, see [Inputs](#inputs), and an ID from the module's outputs cannot
+be written in YAML: keep those entries, or the attributes that refer to an
+output, in HCL.
 
-A token expires after `duration`: one year (`8760h`) by default, never with
-`forever`. Terraform does not renew it, and its plan shows nothing as the date
-nears; Cloudflare's notification "Expiring Access Service Token" warns a week
-before. Every update of a token, a rename included, sets its expiration again
-to `duration` from the time of the update: the provider sends `duration` with
-each update.
+```hcl
+module "access" {
+  # ...
+  access_groups = yamldecode(file("${path.module}/groups.yaml"))
+}
+```
 
-### Rotate the secret
+```yaml
+staff:
+  name: Staff
+  include:
+    - email_domain:
+        domain: example.com
+contractors:
+  name: Contractors
+  include:
+    - email:
+        email: alice@example.net
+```
+
+### Rotate a service token secret
 
 Increment `client_secret_version` and set `previous_client_secret_expires_at`,
 an RFC 3339 timestamp until which Cloudflare still accepts the previous
@@ -532,318 +1137,19 @@ access_service_tokens = {
 }
 ```
 
-### Import a service token
+### Publish an MCP portal
 
-Import a token by its ID, prefixed with `accounts/` and the account:
+The API creates neither the DNS record of the portal nor its Access
+applications, which the dashboard does.
 
-```hcl
-import {
-  to = module.access.cloudflare_zero_trust_access_service_token.this["ci"]
-  id = "accounts/023e105f4ecef8ad9ca31a8372d0c353/3537a672-e4d8-4d89-aab9-26cb622918a1"
-}
-```
-
-The provider never reads `client_secret_version` back: after an import, the
-plan shows it as an update, with `client_secret` known after apply. Applying
-sends the version Cloudflare already has, which does not rotate the secret;
-the expiration starts over from `duration`, and the next plan shows no change.
-Cloudflare does not return the secret of an imported token:
-`access_service_token_client_secrets` gives `null` for it until the next
-rotation. For a token rotated before, write its current
-`client_secret_version`, which the API returns, with
-`previous_client_secret_expires_at`.
-
-## mTLS
-
-Each entry of `access_mtls_certificates` takes the attributes of
-[`cloudflare_zero_trust_access_mtls_certificate`](https://registry.terraform.io/providers/cloudflare/cloudflare/latest/docs/resources/zero_trust_access_mtls_certificate):
-the certificate authority that signs the client certificates, in PEM, with
-the whole chain for an intermediate CA, and the `associated_hostnames` of the
-Access applications that request a client certificate. Their policies accept
-it with the rule `certificate = {}`, or `common_name`. See Cloudflare's
-[mutual TLS guide](https://developers.cloudflare.com/cloudflare-one/access-controls/service-credentials/mutual-tls-authentication/)
-for the requirements on the CA.
-
-mTLS needs a pay-as-you-go or Enterprise plan. On the Free plan, Cloudflare
-refuses a certificate, even on an account that has none: "maximum number of
-certificates has been reached" (code 12130). Certificates are tested with
-mocks and a local copy of the API only.
-
-Changing `certificate` replaces the certificate. To destroy one, the provider
-first empties its `associated_hostnames`.
-
-### Hostname settings
-
-`access_mtls_hostname_settings` holds the mTLS settings of the account's
-hostnames: `china_network` requests client certificates in China, on a zone
-with the China Network; `client_certificate_forwarding` forwards the client
-certificate to the origin, in the `Cf-Client-Cert-Der-Base64` and
-`Cf-Client-Cert-Sha256` headers. When it is `null`, the module leaves the
-settings alone.
-
-`settings` replaces the whole list of the account: list every hostname. The
-provider's create updates the existing list, and its destroy only drops it
-from the state: removing `access_mtls_hostname_settings` leaves the last
-settings applied. Both warn about "Resource Destruction Considerations"; the
-warning is harmless.
-
-The provider never reads `settings` back: a change made outside Terraform
-does not show in the plan. Import the list by account, prefixed with
-`accounts/`:
+1. Create a proxied CNAME record from the portal's hostname to
+   `gateway.agents.cloudflare.com`, such as with the
+   [cloudflare-dns](../cloudflare-dns/README.md) module, or the portal
+   answers with errors 522.
+2. Declare an `mcp_portal` application on the portal's hostname, and an `mcp`
+   application per server, with the policies of its users:
 
 ```hcl
-import {
-  to = module.access.cloudflare_zero_trust_access_mtls_hostname_settings.this[0]
-  id = "accounts/023e105f4ecef8ad9ca31a8372d0c353"
-}
-```
-
-After the import, the plan shows `settings` as an update; applying it sends
-the list of the configuration, and the next plan shows no change.
-The Free plan accepts the list, tried empty only.
-
-### Import an mTLS certificate
-
-Import a certificate by its ID, prefixed with `accounts/` and the account:
-
-```hcl
-import {
-  to = module.access.cloudflare_zero_trust_access_mtls_certificate.this["corp"]
-  id = "accounts/023e105f4ecef8ad9ca31a8372d0c353/f174e90a-fafe-4643-bbbc-4a0ed4fc8415"
-}
-```
-
-The provider cannot read `certificate` back, and warns "MTLS certificate not
-imported": the plan then replaces the certificate, which drops it from its
-hostnames until the new one is created. Do not apply it. Import with the
-`terraform import` command instead, then add the PEM to the state by hand,
-exactly as the configuration gives it:
-
-```bash
-terraform import 'module.access.cloudflare_zero_trust_access_mtls_certificate.this["corp"]' accounts/023e105f4ecef8ad9ca31a8372d0c353/f174e90a-fafe-4643-bbbc-4a0ed4fc8415
-terraform state pull > state.json
-# In state.json, set the instance's attributes.certificate to the PEM,
-# and increment serial.
-terraform state push state.json
-```
-
-The next plan shows no change. This was checked against a local copy of the
-API, since the Free plan refuses certificates.
-
-## Short-lived certificates
-
-Each entry of `access_short_lived_certificates` creates the SSH certificate
-authority of an application, by its `app_id`. Access signs short-lived
-certificates for the users of that application, and the SSH server trusts
-them through the CA's public key, from the output
-`access_short_lived_certificate_public_keys`, set in `TrustedUserCAKeys`. An
-entry can refer to an application of the same call:
-
-```hcl
-access_short_lived_certificates = {
-  ssh = { app_id = module.access.access_application_ids["ssh"] }
-}
-```
-
-Cloudflare calls this setup legacy, and recommends `infrastructure`
-applications for new SSH deployments. Changing `app_id` replaces the CA, with
-a new public key.
-
-Import a CA by the ID of its application, prefixed with `accounts/` and the
-account; the plan shows no change:
-
-```hcl
-import {
-  to = module.access.cloudflare_zero_trust_access_short_lived_certificate.this["ssh"]
-  id = "accounts/023e105f4ecef8ad9ca31a8372d0c353/5a794c35-d97c-4e72-aaa1-ad732a3d0cdd"
-}
-```
-
-## Tags and custom pages
-
-Each entry of `access_tags` creates a tag, by the `name` of
-[`cloudflare_zero_trust_access_tag`](https://registry.terraform.io/providers/cloudflare/cloudflare/latest/docs/resources/zero_trust_access_tag).
-An application takes up to 25 tags in `tags`, by name, and users filter the
-App Launcher by them. The name is also the tag's ID: renaming a tag replaces
-it.
-
-Cloudflare refuses an application with a tag that does not exist yet: "tags
-must be created before assigning to an application" (code 12130). Refer to a
-tag of the same call through the output `access_tag_ids`, so that Terraform
-creates the tag first:
-
-```hcl
-access_tags = {
-  hr = { name = "Human Resources" }
-}
-
-access_applications = {
-  payroll = {
-    name         = "Payroll"
-    type         = "self_hosted"
-    destinations = [{ type = "public", uri = "payroll.example.com" }]
-    policies     = [{ id = module.access.access_policy_ids["staff"] }]
-    tags         = [module.access.access_tag_ids["hr"]]
-  }
-}
-```
-
-Each entry of `access_custom_pages` takes the attributes of
-[`cloudflare_zero_trust_access_custom_page`](https://registry.terraform.io/providers/cloudflare/cloudflare/latest/docs/resources/zero_trust_access_custom_page):
-HTML that Access shows instead of its own page. `identity_denied` is shown to
-a user who fails an identity rule, after login; `forbidden` to a user who
-fails a non-identity rule, such as a country or a device posture, before
-login. The API also accepts `login` and `interstitial`, which Cloudflare's
-documentation does not describe. A `contract_version` of 1 or more marks a
-Liquid template that Cloudflare sanitizes; without it, the page is served as
-written. An application refers to its pages in `custom_pages`, through the
-output `access_custom_page_ids`, and the organization in
-`custom_pages.identity_denied` and `custom_pages.forbidden`.
-
-Custom pages need a pay-as-you-go or Enterprise plan. On the Free plan,
-Cloudflare refuses a page: "account does not have permission for custom
-pages" (HTTP 403, code 12133). Custom pages are tested with mocks only.
-
-While a custom page fails, Terraform creates none of the applications, even
-those without it, see [Refer to other objects](#refer-to-other-objects).
-
-Import a tag by its name, and a custom page by its ID, both prefixed with the
-account:
-
-```hcl
-import {
-  to = module.access.cloudflare_zero_trust_access_tag.this["hr"]
-  id = "023e105f4ecef8ad9ca31a8372d0c353/Human Resources"
-}
-
-import {
-  to = module.access.cloudflare_zero_trust_access_custom_page.this["denied"]
-  id = "023e105f4ecef8ad9ca31a8372d0c353/f174e90a-fafe-4643-bbbc-4a0ed4fc8415"
-}
-```
-
-The plan of an imported tag shows no change.
-
-## Signing keys
-
-`access_key_configuration` sets how often Cloudflare rotates the keys that sign
-Access tokens: `key_rotation_interval_days`, from 21 to 365, which the
-provider checks at plan; Cloudflare's default is 42 days. When it is `null`,
-the module leaves the setting alone. Origins that check the signature of the
-token must fetch the keys from
-`https://<team>.cloudflareaccess.com/cdn-cgi/access/certs` rather than pin
-them: Cloudflare keeps the previous key valid for 7 days after a rotation.
-Terraform does not rotate the keys on demand: that is
-`POST /accounts/<account>/access/keys/rotate`.
-
-The provider's create updates the setting of the account, and its destroy
-only drops it from the state: removing `access_key_configuration` leaves the
-last interval applied. Both warn about "Resource Destruction
-Considerations"; the warning is harmless. Import the setting by account ID,
-and write the interval it has; the plan then shows no change:
-
-```hcl
-import {
-  to = module.access.cloudflare_zero_trust_access_key_configuration.this[0]
-  id = "023e105f4ecef8ad9ca31a8372d0c353"
-}
-```
-
-## Infrastructure targets
-
-Each entry of `access_infrastructure_targets` takes the attributes of
-[`cloudflare_zero_trust_access_infrastructure_target`](https://registry.terraform.io/providers/cloudflare/cloudflare/latest/docs/resources/zero_trust_access_infrastructure_target):
-a server that `infrastructure` applications reach over SSH. `hostname` names
-the target for Access only: it is not resolved, and several targets can share
-it. `ip` gives its IPv4 or IPv6 address, or both, each in a virtual network:
-`virtual_network_id` takes the ID of a virtual network, such as
-`cloudflare_zero_trust_tunnel_cloudflared_virtual_network.x.id`; left out,
-Cloudflare takes the account's default virtual network. An address belongs to
-one target only within a virtual network. Cloudflare accepts an address that
-no tunnel route covers yet.
-
-`tags` labels the target with key-value pairs, one value per key, which the
-`target_criteria` of an application match. They are not the Access tags
-above. An application selects its targets by `hostname` or `tags`, not by ID,
-so it does not depend on them:
-
-```hcl
-access_infrastructure_targets = {
-  db1 = {
-    hostname = "db-1"
-    ip       = { ipv4 = { ip_addr = "10.0.0.11", virtual_network_id = var.virtual_network_id } }
-    tags     = { environment = "production" }
-  }
-}
-```
-
-and, in an `infrastructure` application,
-`include = { tags = { environment = ["production"] } }`.
-
-Import a target by its ID, prefixed with the account; the plan shows no
-change:
-
-```hcl
-import {
-  to = module.access.cloudflare_zero_trust_access_infrastructure_target.this["db1"]
-  id = "023e105f4ecef8ad9ca31a8372d0c353/0e1f2a3b-4c5d-4e6f-8a9b-0c1d2e3f4a5b"
-}
-```
-
-## MCP servers and portals
-
-Each entry of `access_ai_controls_mcp_servers` takes the attributes of
-[`cloudflare_zero_trust_access_ai_controls_mcp_server`](https://registry.terraform.io/providers/cloudflare/cloudflare/latest/docs/resources/zero_trust_access_ai_controls_mcp_server):
-an MCP server reached over HTTP, by the full URL of its endpoint in
-`hostname`, such as `https://docs.mcp.cloudflare.com/mcp`. `auth_type` is
-`unauthenticated`, `bearer`, with the token or a JSON object of headers in
-`auth_credentials`, or `oauth`. Cloudflare connects to the server when it
-creates it: a server it cannot reach is still created, in status `error`.
-
-`id` is yours, and prefixes the name of each tool and prompt the server
-exposes through a portal, as `<id>_<tool>`. The portal splits that name at the
-first underscore: use hyphens in `id`, not underscores. Changing `id`,
-`auth_type` or `hostname` replaces the server.
-
-Cloudflare never returns `auth_credentials` and `client_secret`, which are
-sensitive. After an import, the plan shows them as an update: applying sends
-them again, and the next plan shows no change. This was checked with a bearer
-token.
-
-Each entry of `access_ai_controls_mcp_portals` takes the attributes of
-[`cloudflare_zero_trust_access_ai_controls_mcp_portal`](https://registry.terraform.io/providers/cloudflare/cloudflare/latest/docs/resources/zero_trust_access_ai_controls_mcp_portal),
-but the deprecated `allow_code_mode`: a single MCP endpoint, on `hostname` in
-a zone of the account, for the servers of `servers`. `code_mode` defaults to
-`opt_in`. `on_behalf` defaults to `true`, each user authorizing the server
-with their own credentials; set it to `false` to use the server's admin
-credential, which service tokens need.
-
-Unlike the dashboard, the API creates neither the DNS record of the portal
-nor its Access applications. Create a proxied CNAME record from the portal's
-hostname to `gateway.agents.cloudflare.com`, such as with the
-[cloudflare-dns](../cloudflare-dns/README.md) module, or the portal answers
-with errors 522. Declare an `mcp_portal` application on the portal's hostname,
-and an `mcp` application per server, with the policies of its users:
-
-```hcl
-access_ai_controls_mcp_servers = {
-  docs = {
-    id        = "docs"
-    name      = "Cloudflare docs"
-    hostname  = "https://docs.mcp.cloudflare.com/mcp"
-    auth_type = "unauthenticated"
-  }
-}
-
-access_ai_controls_mcp_portals = {
-  main = {
-    id       = "main"
-    name     = "MCP"
-    hostname = "mcp.example.com"
-    servers  = [{ server_id = module.access.access_ai_controls_mcp_server_ids["docs"] }]
-  }
-}
-
 access_applications = {
   mcp_portal = {
     name         = "MCP"
@@ -860,17 +1166,57 @@ access_applications = {
 }
 ```
 
-The Free plan accepts servers, portals and both applications.
+### Rename a key
 
-Import a server or a portal by its `id`, prefixed with the account; the plan
-of a portal shows no change:
+Renaming a key replaces the object, with a new ID. To rename a key without
+touching Cloudflare, declare the move, with the resource of its input:
 
 ```hcl
-import {
-  to = module.access.cloudflare_zero_trust_access_ai_controls_mcp_portal.this["main"]
-  id = "023e105f4ecef8ad9ca31a8372d0c353/main"
+moved {
+  from = module.access.cloudflare_zero_trust_access_application.this["old"]
+  to   = module.access.cloudflare_zero_trust_access_application.this["new"]
 }
 ```
+
+The resources are `cloudflare_zero_trust_access_<kind>.this`, such as
+`..._identity_provider`, `..._group` or `..._service_token`, listed in the
+[Reference](#reference).
+
+### Stop managing without deleting
+
+**The whole module.** Remove the `module` block and declare its removal
+(Terraform 1.7 or later). The plan then shows each object as "will no longer
+be managed by Terraform, but will not be destroyed". Before Terraform 1.7,
+run `terraform state rm module.access` instead.
+
+```hcl
+removed {
+  from = module.access
+
+  lifecycle {
+    destroy = false
+  }
+}
+```
+
+**One object.** A `removed` block cannot target one key of an input: forget
+it with `terraform state rm`, then remove its entry.
+
+```bash
+terraform state rm 'module.access.cloudflare_zero_trust_access_application.this["wiki"]'
+```
+
+## Requirements
+
+| | Version | Checked with |
+|---|---|---|
+| Terraform | `>= 1.3`, the first with optional object attributes | 1.3.10 and 1.16.5 |
+| Provider [`cloudflare/cloudflare`](https://registry.terraform.io/providers/cloudflare/cloudflare/latest) | `~> 5.28`, which renamed `mfa_ssh_piv_key_requirements` of the organization to `mfa_piv_key_requirements` | 5.28.0 |
+
+`import` blocks need Terraform 1.5 or later, and `removed` blocks and the
+[import example](examples/import) 1.7. The provider reads its API token from
+the `CLOUDFLARE_API_TOKEN` environment variable, with the permissions listed
+in [Quick start](#quick-start).
 
 ## Reference
 
@@ -2277,7 +2623,7 @@ Description: IDs of the Access applications, by key of `access_applications`.
 
 #### <a name="output_access_application_saas_apps"></a> [access\_application\_saas\_apps](#output\_access\_application\_saas\_apps)
 
-Description: SaaS settings of the Access applications, by key of `access_applications`, as the provider returns them, with what Cloudflare generates: `client_id` and `client_secret` (OIDC), `idp_entity_id`, `sso_endpoint` and `public_key` (SAML). `null` for an application without `saas_app`. Cloudflare returns `client_secret` only at creation, see [Outputs of an application](#outputs-of-an-application).
+Description: SaaS settings of the Access applications, by key of `access_applications`, as the provider returns them, with what Cloudflare generates: `client_id` and `client_secret` (OIDC), `idp_entity_id`, `sso_endpoint` and `public_key` (SAML). `null` for an application without `saas_app`. Cloudflare returns `client_secret` only at creation, see [SaaS applications](#saas-applications).
 
 #### <a name="output_access_custom_page_ids"></a> [access\_custom\_page\_ids](#output\_access\_custom\_page\_ids)
 

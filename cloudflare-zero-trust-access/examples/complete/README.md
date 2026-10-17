@@ -8,7 +8,7 @@ service token; an mTLS certificate authority and the hostname settings; the
 SSH certificate authority of the `ssh` application; a tag; the rotation of the
 signing keys; two infrastructure targets; an MCP server and its portal.
 Objects refer to each other through the module's outputs, see
-[Refer to other objects](../../README.md#refer-to-other-objects).
+[How it works](../../README.md#how-it-works).
 
 Some of these need a paid plan, and the apply fails without one:
 

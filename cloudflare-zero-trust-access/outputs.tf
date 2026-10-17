@@ -30,7 +30,7 @@ output "access_application_auds" {
 }
 
 output "access_application_saas_apps" {
-  description = "SaaS settings of the Access applications, by key of `access_applications`, as the provider returns them, with what Cloudflare generates: `client_id` and `client_secret` (OIDC), `idp_entity_id`, `sso_endpoint` and `public_key` (SAML). `null` for an application without `saas_app`. Cloudflare returns `client_secret` only at creation, see [Outputs of an application](#outputs-of-an-application)."
+  description = "SaaS settings of the Access applications, by key of `access_applications`, as the provider returns them, with what Cloudflare generates: `client_id` and `client_secret` (OIDC), `idp_entity_id`, `sso_endpoint` and `public_key` (SAML). `null` for an application without `saas_app`. Cloudflare returns `client_secret` only at creation, see [SaaS applications](#saas-applications)."
   value       = { for key, app in cloudflare_zero_trust_access_application.this : key => app.saas_app }
   sensitive   = true
 }

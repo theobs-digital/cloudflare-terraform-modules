@@ -70,18 +70,17 @@ configuration, and one apply clears them:
 
 - the `service_token_inactivity` of the organization, above;
 - the `client_secret` of an identity provider, which Cloudflare never
-  returns, see [Import an identity provider](../../README.md#import-an-identity-provider);
+  returns;
 - the policies written inside an `infrastructure` application, and two
-  booleans of an `mcp` application, see
-  [Import an application](../../README.md#import-an-application).
+  booleans of an `mcp` application.
+
+See [Adopt an existing setup](../../README.md#adopt-an-existing-setup).
 
 ## Other objects
 
-The module README gives the import ID of every other resource: service
-tokens, mTLS certificates and hostname settings, short-lived certificates,
-tags, custom pages, signing keys, infrastructure targets, MCP servers and
-portals. Read it before importing service tokens, whose expiration restarts
-at the first apply, and mTLS certificates, which the plan of an `import`
-block replaces:
-see [Import a service token](../../README.md#import-a-service-token) and
-[Import an mTLS certificate](../../README.md#import-an-mtls-certificate).
+The module README gives the import ID of every other input, and what the plan
+shows after the import, in
+[Adopt an existing setup](../../README.md#adopt-an-existing-setup). Read it
+before importing service tokens, whose expiration restarts at the first
+apply, and mTLS certificates, which the plan of an `import` block replaces:
+see [Import an mTLS certificate](../../README.md#import-an-mtls-certificate).
