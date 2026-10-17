@@ -90,9 +90,11 @@ terraform -chdir=cloudflare-dns test
 
 The [Checks](.github/workflows/checks.yml) workflow runs the same hooks, then
 the tests of every module, on each pull request and each push to `main`, with
-the tool versions listed above. A second job validates `cloudflare-dns` with
-the bottom of its requirements, Terraform 1.3.10 and provider 5.27.0. Both
-must pass before a pull request can be merged into `main`.
+the tool versions listed above. Two more jobs validate each module with the
+bottom of its requirements: `cloudflare-dns` with Terraform 1.3.10 and
+provider 5.27.0, `cloudflare-zero-trust-access` with Terraform 1.3.10 and
+provider 5.28.0. The branch protection of `main` lists the jobs a pull
+request must pass before it is merged.
 
 These tests mock the provider, so they cannot see what Cloudflare does with
 a value. A module can also hold tests against the real API, in `tests-real`,
@@ -106,19 +108,40 @@ export CLOUDFLARE_API_TOKEN=...
 terraform -chdir=cloudflare-dns test -test-directory=tests-real -var name=example.com -var account_id=...
 ```
 
-The [Real zone tests](.github/workflows/tests-real.yml) workflow runs them
+For `cloudflare-zero-trust-access`, `tests-real` is a configuration that
+calls the module, as a user would, with objects that refer to each other
+through its outputs, which a test file cannot write. Apply it, plan again,
+which must show no change, and destroy it. The account's Zero Trust
+organization must exist; the objects are named `tf-test-ci-*`, under
+`tf-test-ci.<zone>`, and the settings of the account are left alone:
+
+```bash
+export CLOUDFLARE_API_TOKEN=...
+cd cloudflare-zero-trust-access/tests-real
+terraform init
+terraform apply -var account_id=... -var zone=example.com
+terraform plan -detailed-exitcode -var account_id=... -var zone=example.com
+terraform destroy -var account_id=... -var zone=example.com
+```
+
+The [Real API tests](.github/workflows/tests-real.yml) workflow runs them
 every day with the newest provider 5.x, and on demand from the Actions tab.
-It reads three repository secrets:
+For `cloudflare-zero-trust-access`, a second plan with a change fails the
+run: that is a provider that drifts from what it applied. It reads these
+repository secrets:
 
 | Secret | Value |
 |---|---|
 | `CLOUDFLARE_API_TOKEN` | a token for the test zone only: Zone → DNS → Edit and Zone → Zone → Read |
 | `TEST_ZONE` | the name of the test zone |
 | `TEST_ACCOUNT_ID` | the ID of its account |
+| `ZERO_TRUST_TEST_API_TOKEN` | a token for the Zero Trust test account only, with the permissions in the [Quick start](cloudflare-zero-trust-access/README.md#quick-start) of `cloudflare-zero-trust-access` |
+| `ZERO_TRUST_TEST_ACCOUNT_ID` | the ID of that account |
+| `ZERO_TRUST_TEST_ZONE` | the name of a zone in that account |
 
-Before the tests, the workflow deletes `tf-test.<zone>` and every name under
-it, where a run cut short before its cleanup leaves its records. Keep these
-names for this workflow only.
+Before the tests, the workflow deletes what a run cut short before its
+cleanup leaves behind: `tf-test.<zone>` and every name under it, and the
+Access objects named `tf-test-ci-*`. Keep these names for this workflow only.
 
 ### Release a module
 
