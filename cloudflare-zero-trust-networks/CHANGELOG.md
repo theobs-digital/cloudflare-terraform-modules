@@ -12,5 +12,10 @@ Releases are tagged `cloudflare-zero-trust-networks/vX.Y.Z`.
 
 - Requirements: Terraform >= 1.3 and provider `cloudflare/cloudflare` ~> 5.28
 - `account_id`, the account of every resource of the module
+- `tunnel_cloudflareds`, Cloudflare Tunnels, with their IDs in
+  `tunnel_cloudflared_ids` and the tokens that run them in the sensitive
+  `tunnel_cloudflared_tokens`
+- `tunnel_cloudflared_configs`, the remote configuration of tunnels: ingress
+  rules and origin request settings
 
 [Unreleased]: https://github.com/theobs-digital/cloudflare-terraform-modules/commits/main/cloudflare-zero-trust-networks
