@@ -671,7 +671,7 @@ variable "access_policies" {
 }
 
 variable "access_applications" {
-  description = "Access applications, by a key of your choice. The key only names the application in the state: keep it stable, since renaming a key replaces the application. Each application takes the attributes of `cloudflare_zero_trust_access_application` under the same names; set `type` before any attribute specific to a type. `policies` refers to reusable policies by ID, such as `{ id = module.<name>.access_policy_ids[\"<key>\"], precedence = 1 }`, except for an `infrastructure` application, which takes policies written inside it, with `connection_rules`. See [Applications](#applications)."
+  description = "Access applications, by a key of your choice. The key only names the application in the state: keep it stable, since renaming a key replaces the application. Each application takes the attributes of `cloudflare_zero_trust_access_application` under the same names. Set `type`: without it, the provider refuses the attributes specific to a type. `policies` refers to reusable policies by ID, such as `{ id = module.<name>.access_policy_ids[\"<key>\"], precedence = 1 }`, except for an `infrastructure` application, which takes policies written inside it, with `connection_rules`. See [Applications](#applications)."
   type = map(object({
     allow_authenticate_via_warp = optional(bool)
     allow_iframe                = optional(bool)
@@ -1149,7 +1149,7 @@ variable "access_mtls_hostname_settings" {
 }
 
 variable "access_short_lived_certificates" {
-  description = "Short-lived certificate CAs, one per SSH application, by a key of your choice. Each takes the `app_id` of `cloudflare_zero_trust_access_short_lived_certificate`, such as `module.<name>.access_application_ids[\"<key>\"]`. Changing `app_id` replaces the CA, and its public key. See [Short-lived certificates](#short-lived-certificates)."
+  description = "Short-lived certificate CAs, one per SSH application, by a key of your choice. The key only names the CA in the state: keep it stable, since renaming a key replaces the CA, and its public key. Each takes the `app_id` of `cloudflare_zero_trust_access_short_lived_certificate`, such as `module.<name>.access_application_ids[\"<key>\"]`. Changing `app_id` replaces the CA, and its public key. See [Short-lived certificates](#short-lived-certificates)."
   type = map(object({
     app_id = string
   }))
@@ -1157,7 +1157,7 @@ variable "access_short_lived_certificates" {
 }
 
 variable "access_tags" {
-  description = "Tags of Access applications, by a key of your choice. Each tag takes the `name` of `cloudflare_zero_trust_access_tag`, which is also its ID: changing it replaces the tag. An application of the same call refers to a tag with `tags = [module.<name>.access_tag_ids[\"<key>\"]]`. See [Tags and custom pages](#tags-and-custom-pages)."
+  description = "Tags of Access applications, by a key of your choice. The key only names the tag in the state: keep it stable, since renaming a key replaces the tag. Each tag takes the `name` of `cloudflare_zero_trust_access_tag`, which is also its ID: changing it replaces the tag. An application of the same call refers to a tag with `tags = [module.<name>.access_tag_ids[\"<key>\"]]`. See [Tags and custom pages](#tags-and-custom-pages)."
   type = map(object({
     name = string
   }))
@@ -1203,7 +1203,7 @@ variable "access_infrastructure_targets" {
 }
 
 variable "access_ai_controls_mcp_servers" {
-  description = "MCP servers of AI controls, by a key of your choice. Each server takes the attributes of `cloudflare_zero_trust_access_ai_controls_mcp_server` under the same names, with an `id` of your choice. Changing `id`, `auth_type` or `hostname` replaces the server. Keep `auth_credentials` and `client_secret` out of versioned files. See [MCP servers and portals](#mcp-servers-and-portals)."
+  description = "MCP servers of AI controls, by a key of your choice. The key only names the server in the state: keep it stable, since renaming a key replaces the server. Each server takes the attributes of `cloudflare_zero_trust_access_ai_controls_mcp_server` under the same names, with an `id` of your choice. Changing `id`, `auth_type` or `hostname` replaces the server. Keep `auth_credentials` and `client_secret` out of versioned files. See [MCP servers and portals](#mcp-servers-and-portals)."
   type = map(object({
     auth_type                        = string
     hostname                         = string
@@ -1231,7 +1231,7 @@ variable "access_ai_controls_mcp_servers" {
 }
 
 variable "access_ai_controls_mcp_portals" {
-  description = "MCP portals of AI controls, by a key of your choice. Each portal takes the attributes of `cloudflare_zero_trust_access_ai_controls_mcp_portal` under the same names, but the deprecated `allow_code_mode`, with an `id` of your choice: changing `id` replaces the portal. A portal refers to a server of the same call with `server_id = module.<name>.access_ai_controls_mcp_server_ids[\"<key>\"]`. See [MCP servers and portals](#mcp-servers-and-portals)."
+  description = "MCP portals of AI controls, by a key of your choice. The key only names the portal in the state: keep it stable, since renaming a key replaces the portal. Each portal takes the attributes of `cloudflare_zero_trust_access_ai_controls_mcp_portal` under the same names, but the deprecated `allow_code_mode`, with an `id` of your choice: changing `id` replaces the portal. A portal refers to a server of the same call with `server_id = module.<name>.access_ai_controls_mcp_server_ids[\"<key>\"]`. See [MCP servers and portals](#mcp-servers-and-portals)."
   type = map(object({
     hostname           = string
     id                 = string

@@ -92,9 +92,10 @@ source and the versioning rules.
 | Terraform | `>= 1.3`, the first with optional object attributes | 1.3.10 and 1.16.5 |
 | Provider [`cloudflare/cloudflare`](https://registry.terraform.io/providers/cloudflare/cloudflare/latest) | `~> 5.28`, which renamed `mfa_ssh_piv_key_requirements` of the organization to `mfa_piv_key_requirements` | 5.28.0 |
 
-The [import example](examples/import) needs Terraform 1.7 or later. The
-provider reads its API token from the `CLOUDFLARE_API_TOKEN` environment
-variable.
+The `import` blocks of this README need Terraform 1.5 or later; before,
+run `terraform import` with the same address and ID. The
+[import example](examples/import) needs Terraform 1.7 or later. The provider
+reads its API token from the `CLOUDFLARE_API_TOKEN` environment variable.
 
 ## Organization
 
@@ -695,9 +696,9 @@ fails a non-identity rule, such as a country or a device posture, before
 login. The API also accepts `login` and `interstitial`, which Cloudflare's
 documentation does not describe. A `contract_version` of 1 or more marks a
 Liquid template that Cloudflare sanitizes; without it, the page is served as
-written. An application refers to its pages in
-`custom_pages`, through the output `access_custom_page_ids`, and the
-organization in `custom_pages.identity_denied` and `custom_pages.forbidden`.
+written. An application refers to its pages in `custom_pages`, through the
+output `access_custom_page_ids`, and the organization in
+`custom_pages.identity_denied` and `custom_pages.forbidden`.
 
 Custom pages need a pay-as-you-go or Enterprise plan. On the Free plan,
 Cloudflare refuses a page: "account does not have permission for custom
@@ -913,7 +914,7 @@ The following input variables are optional (have default values):
 
 #### <a name="input_access_ai_controls_mcp_portals"></a> [access\_ai\_controls\_mcp\_portals](#input\_access\_ai\_controls\_mcp\_portals)
 
-Description: MCP portals of AI controls, by a key of your choice. Each portal takes the attributes of `cloudflare_zero_trust_access_ai_controls_mcp_portal` under the same names, but the deprecated `allow_code_mode`, with an `id` of your choice: changing `id` replaces the portal. A portal refers to a server of the same call with `server_id = module.<name>.access_ai_controls_mcp_server_ids["<key>"]`. See [MCP servers and portals](#mcp-servers-and-portals).
+Description: MCP portals of AI controls, by a key of your choice. The key only names the portal in the state: keep it stable, since renaming a key replaces the portal. Each portal takes the attributes of `cloudflare_zero_trust_access_ai_controls_mcp_portal` under the same names, but the deprecated `allow_code_mode`, with an `id` of your choice: changing `id` replaces the portal. A portal refers to a server of the same call with `server_id = module.<name>.access_ai_controls_mcp_server_ids["<key>"]`. See [MCP servers and portals](#mcp-servers-and-portals).
 
 Type:
 
@@ -949,7 +950,7 @@ Default: `{}`
 
 #### <a name="input_access_ai_controls_mcp_servers"></a> [access\_ai\_controls\_mcp\_servers](#input\_access\_ai\_controls\_mcp\_servers)
 
-Description: MCP servers of AI controls, by a key of your choice. Each server takes the attributes of `cloudflare_zero_trust_access_ai_controls_mcp_server` under the same names, with an `id` of your choice. Changing `id`, `auth_type` or `hostname` replaces the server. Keep `auth_credentials` and `client_secret` out of versioned files. See [MCP servers and portals](#mcp-servers-and-portals).
+Description: MCP servers of AI controls, by a key of your choice. The key only names the server in the state: keep it stable, since renaming a key replaces the server. Each server takes the attributes of `cloudflare_zero_trust_access_ai_controls_mcp_server` under the same names, with an `id` of your choice. Changing `id`, `auth_type` or `hostname` replaces the server. Keep `auth_credentials` and `client_secret` out of versioned files. See [MCP servers and portals](#mcp-servers-and-portals).
 
 Type:
 
@@ -983,7 +984,7 @@ Default: `{}`
 
 #### <a name="input_access_applications"></a> [access\_applications](#input\_access\_applications)
 
-Description: Access applications, by a key of your choice. The key only names the application in the state: keep it stable, since renaming a key replaces the application. Each application takes the attributes of `cloudflare_zero_trust_access_application` under the same names; set `type` before any attribute specific to a type. `policies` refers to reusable policies by ID, such as `{ id = module.<name>.access_policy_ids["<key>"], precedence = 1 }`, except for an `infrastructure` application, which takes policies written inside it, with `connection_rules`. See [Applications](#applications).
+Description: Access applications, by a key of your choice. The key only names the application in the state: keep it stable, since renaming a key replaces the application. Each application takes the attributes of `cloudflare_zero_trust_access_application` under the same names. Set `type`: without it, the provider refuses the attributes specific to a type. `policies` refers to reusable policies by ID, such as `{ id = module.<name>.access_policy_ids["<key>"], precedence = 1 }`, except for an `infrastructure` application, which takes policies written inside it, with `connection_rules`. See [Applications](#applications).
 
 Type:
 
@@ -2175,7 +2176,7 @@ Default: `{}`
 
 #### <a name="input_access_short_lived_certificates"></a> [access\_short\_lived\_certificates](#input\_access\_short\_lived\_certificates)
 
-Description: Short-lived certificate CAs, one per SSH application, by a key of your choice. Each takes the `app_id` of `cloudflare_zero_trust_access_short_lived_certificate`, such as `module.<name>.access_application_ids["<key>"]`. Changing `app_id` replaces the CA, and its public key. See [Short-lived certificates](#short-lived-certificates).
+Description: Short-lived certificate CAs, one per SSH application, by a key of your choice. The key only names the CA in the state: keep it stable, since renaming a key replaces the CA, and its public key. Each takes the `app_id` of `cloudflare_zero_trust_access_short_lived_certificate`, such as `module.<name>.access_application_ids["<key>"]`. Changing `app_id` replaces the CA, and its public key. See [Short-lived certificates](#short-lived-certificates).
 
 Type:
 
@@ -2189,7 +2190,7 @@ Default: `{}`
 
 #### <a name="input_access_tags"></a> [access\_tags](#input\_access\_tags)
 
-Description: Tags of Access applications, by a key of your choice. Each tag takes the `name` of `cloudflare_zero_trust_access_tag`, which is also its ID: changing it replaces the tag. An application of the same call refers to a tag with `tags = [module.<name>.access_tag_ids["<key>"]]`. See [Tags and custom pages](#tags-and-custom-pages).
+Description: Tags of Access applications, by a key of your choice. The key only names the tag in the state: keep it stable, since renaming a key replaces the tag. Each tag takes the `name` of `cloudflare_zero_trust_access_tag`, which is also its ID: changing it replaces the tag. An application of the same call refers to a tag with `tags = [module.<name>.access_tag_ids["<key>"]]`. See [Tags and custom pages](#tags-and-custom-pages).
 
 Type:
 
