@@ -10,3 +10,6 @@ override.tf
 override.tf.json
 *_override.tf
 *_override.tf.json
+
+# Local French documentation, kept out of the repository
+README.fr.md
