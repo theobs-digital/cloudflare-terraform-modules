@@ -47,7 +47,7 @@ Install these tools before working on the repository:
 |---|---|---|
 | [Terraform](https://developer.hashicorp.com/terraform/install) | 1.16.5 | fmt, validate and `terraform test` |
 | [TFLint](https://github.com/terraform-linters/tflint) | 0.64.0 | lint, with `.tflint.hcl` |
-| [terraform-docs](https://terraform-docs.io/user-guide/installation/) | 0.24.0 | the tables between `BEGIN_TF_DOCS` and `END_TF_DOCS` in each module README |
+| [terraform-docs](https://terraform-docs.io/user-guide/installation/) | 0.24.0 | the reference between `BEGIN_TF_DOCS` and `END_TF_DOCS` in each module README, with `.terraform-docs.yml` |
 | [pre-commit](https://pre-commit.com/#install) | 4.5.1 | runs the hooks of `.pre-commit-config.yaml` |
 
 Working on a module takes Terraform 1.7 or later: its tests use

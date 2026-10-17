@@ -7,5 +7,7 @@ repos:
       - id: terraform_tflint
         args:
           - --args=--config=__GIT_WORKING_DIR__/.tflint.hcl
-      # No --config: terraform-docs reads the .terraform-docs.yml of each module.
+      # Without --config, the hook forces the table format.
       - id: terraform_docs
+        args:
+          - --args=--config=.terraform-docs.yml
