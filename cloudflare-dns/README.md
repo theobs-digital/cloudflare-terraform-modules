@@ -43,7 +43,7 @@ Adopting a zone another configuration owns takes less, see [Zone](#zone).
 
 ```hcl
 module "dns" {
-  source = "github.com/theobs-digital/cloudflare-terraform-modules//cloudflare-dns?ref=cloudflare-dns/v1.1.0"
+  source = "github.com/theobs-digital/cloudflare-terraform-modules//cloudflare-dns?ref=cloudflare-dns/v1.2.0"
 
   account_id = "023e105f4ecef8ad9ca31a8372d0c353"
   name       = "example.com"

@@ -9,7 +9,7 @@ keeps its attribute names, so whoever knows the provider knows the module.
 
 | Module | Manages | Latest release |
 |---|---|---|
-| [`cloudflare-dns`](cloudflare-dns) | A DNS zone: the zone, its records, its DNS settings and DNSSEC | [`cloudflare-dns/v1.1.0`](cloudflare-dns/CHANGELOG.md) |
+| [`cloudflare-dns`](cloudflare-dns) | A DNS zone: the zone, its records, its DNS settings and DNSSEC | [`cloudflare-dns/v1.2.0`](cloudflare-dns/CHANGELOG.md) |
 
 ## Usage
 
@@ -19,7 +19,7 @@ module by Git, with the folder after `//` and the tag in `ref`:
 
 ```hcl
 module "dns" {
-  source = "github.com/theobs-digital/cloudflare-terraform-modules//cloudflare-dns?ref=cloudflare-dns/v1.1.0"
+  source = "github.com/theobs-digital/cloudflare-terraform-modules//cloudflare-dns?ref=cloudflare-dns/v1.2.0"
 
   # ...
 }
@@ -27,7 +27,7 @@ module "dns" {
 
 Terraform clones the repository over HTTPS, which needs no credentials. To
 clone over SSH instead, write the source as
-`git::ssh://git@github.com/theobs-digital/cloudflare-terraform-modules.git//cloudflare-dns?ref=cloudflare-dns/v1.1.0`.
+`git::ssh://git@github.com/theobs-digital/cloudflare-terraform-modules.git//cloudflare-dns?ref=cloudflare-dns/v1.2.0`.
 
 Releases follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html),
 module by module, and each module records its changes in its own
@@ -72,6 +72,10 @@ pre-commit run --all-files
 terraform -chdir=cloudflare-dns init -backend=false
 terraform -chdir=cloudflare-dns test
 ```
+
+The [Checks](.github/workflows/checks.yml) workflow runs the same hooks, then
+the tests of every module, on each pull request and each push to `main`, with
+the tool versions listed above.
 
 These tests mock the provider, so they cannot see what Cloudflare does with
 a value. A module can also hold tests against the real API, in `tests-real`,
