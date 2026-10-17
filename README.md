@@ -91,8 +91,8 @@ Update the module's `CHANGELOG.md`, then tag the commit with the module prefix
 and push the tag:
 
 ```bash
-git tag cloudflare-dns/v1.0.0
-git push origin cloudflare-dns/v1.0.0
+git tag -a cloudflare-dns/vX.Y.Z -m "cloudflare-dns vX.Y.Z"
+git push origin cloudflare-dns/vX.Y.Z
 ```
 
 ## License

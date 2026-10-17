@@ -164,7 +164,7 @@ records = {
     content = "example.com"  # A, AAAA, CNAME, MX, NS, OPENPGPKEY, PTR, TXT
     # data  = { ... }        # every other type, see the table below
 
-    ttl      = 1             # default 1 (automatic), or 60 to 86400 seconds
+    ttl      = 1             # default 1 (automatic), or 60 to 86400 seconds, 30 minimum on Enterprise
     proxied  = true          # A, AAAA and CNAME only; then ttl stays 1
     priority = 10            # MX, SRV and URI records only
     comment  = "Web front"   # a note for humans, no effect on DNS
@@ -428,21 +428,26 @@ record ID looked up by name, type and content.
 
 The module has no defaults of its own for records. To give many records the
 same values, merge them in your configuration: a value the record sets wins.
+A default can depend on the type, as `proxied` here, which only A, AAAA and
+CNAME records take.
 
 ```hcl
 locals {
-  record_defaults = { proxied = true, comment = "Managed by Terraform" }
-
   records = {
     apex = { name = "@", type = "A", content = "192.0.2.10" }
     www  = { name = "www", type = "CNAME", content = "example.com" }
-    mx   = { name = "@", type = "MX", content = "mx1.example.net", priority = 10, proxied = false }
+    mx   = { name = "@", type = "MX", content = "mx1.example.net", priority = 10 }
   }
 }
 
 module "dns" {
   # ...
-  records = { for key, record in local.records : key => merge(local.record_defaults, record) }
+  records = {
+    for key, record in local.records : key => merge({
+      comment = "Managed by Terraform"
+      proxied = contains(["A", "AAAA", "CNAME"], record.type) ? true : null
+    }, record)
+  }
 }
 ```
 
