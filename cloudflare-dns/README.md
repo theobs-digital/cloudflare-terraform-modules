@@ -161,6 +161,12 @@ records = {
 The plan fails on a record with neither `content` nor `data`, with both, or
 proxied with a `ttl` other than `1`.
 
+> [!WARNING]
+> **A misspelled attribute is dropped without a word.** Terraform discards
+> the attributes an input does not declare, in `records` as in `dns_settings`
+> or `dnssec`: `proxid = true` leaves the record unproxied, and the plan shows
+> no error. Check the names against the blocks on this page.
+
 **Fields of `data`, type by type:**
 
 | Type | Fields of `data` |
@@ -182,7 +188,7 @@ the module creates records after DNSSEC, so the option is on first.
 
 #### Values Cloudflare rewrites
 
-Cloudflare stores three values its own way. Write them as it stores them, or
+Cloudflare stores four values its own way. Write them as it stores them, or
 each plan shows the difference again:
 
 ```diff
@@ -197,6 +203,10 @@ each plan shows the difference again:
   # SSHFP: fingerprint in upper case
 - fingerprint = "a1b2c3d4e5f6…"
 + fingerprint = "A1B2C3D4E5F6…"
+
+  # HTTPS, SVCB: target with its final dot, unless it is "."
+- target = "svc.example.net"
++ target = "svc.example.net."
 ```
 
 Everything else stays as written: a TXT `content` with or without quotes, an
@@ -335,12 +345,14 @@ going to `null`, write the value it had. To switch DNSSEC on or off, follow
 - **Writing `soa` outside Enterprise** fails with error 1003. Leave it out.
 - **Paid features on the Free plan** fail: record `tags`,
   `settings.flatten_cname = true` and `vanity_name_servers`.
+- **A misspelled attribute**, such as `proxid`, is dropped without an error:
+  the apply goes ahead without it. See [Records](#records).
 
 **🟡 A change at every plan**
 
 - A simple DNS setting, or a field of `soa`, left out: write them all, see
   [DNS settings](#dns-settings).
-- An SRV, NAPTR or SSHFP record written your own way: see
+- An SRV, NAPTR, SSHFP, HTTPS or SVCB record written your own way: see
   [Values Cloudflare rewrites](#values-cloudflare-rewrites).
 - A record with `settings`, a short `name` and not all three fields: see
   [Names and `settings`](#names-and-settings).
@@ -364,6 +376,56 @@ module looks the zone up by `name` and manages only what you declare in it.
 To bring an existing zone and its records under this module without touching
 DNS, follow the [import example](examples/import): `import` blocks, with each
 record ID looked up by name, type and content.
+
+### Share values between records
+
+The module has no defaults of its own for records. To give many records the
+same values, merge them in your configuration: a value the record sets wins.
+
+```hcl
+locals {
+  record_defaults = { proxied = true, comment = "Managed by Terraform" }
+
+  records = {
+    apex = { name = "@", type = "A", content = "192.0.2.10" }
+    www  = { name = "www", type = "CNAME", content = "example.com" }
+    mx   = { name = "@", type = "MX", content = "mx1.example.net", priority = 10, proxied = false }
+  }
+}
+
+module "dns" {
+  # ...
+  records = { for key, record in local.records : key => merge(local.record_defaults, record) }
+}
+```
+
+### Keep the records in YAML
+
+`records` takes the same map from a YAML file. Quote `"@"`, which YAML
+reserves at the start of a value. A misspelled key is dropped there too, see
+[Records](#records).
+
+```hcl
+module "dns" {
+  # ...
+  records = yamldecode(file("${path.module}/dns.yaml"))
+}
+```
+
+```yaml
+apex:
+  name: "@"
+  type: A
+  content: 192.0.2.10
+  proxied: true
+caa:
+  name: "@"
+  type: CAA
+  data:
+    flags: 0
+    tag: issue
+    value: letsencrypt.org
+```
 
 ### Rename a record key
 
@@ -471,7 +533,7 @@ flowchart LR
 | | Version | Checked with |
 |---|---|---|
 | Terraform | `>= 1.3`, the first that accepts a default in `optional()` | 1.3.10 and 1.16.5 |
-| Provider [`cloudflare/cloudflare`](https://registry.terraform.io/providers/cloudflare/cloudflare/latest) | `~> 5.27` | 5.27.0 |
+| Provider [`cloudflare/cloudflare`](https://registry.terraform.io/providers/cloudflare/cloudflare/latest) | `~> 5.27` | 5.27.0 and 5.28.0 |
 
 `removed` blocks and the [import example](examples/import) need Terraform 1.7
 or later. The provider reads its API token from the `CLOUDFLARE_API_TOKEN`

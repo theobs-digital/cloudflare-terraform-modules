@@ -73,6 +73,18 @@ terraform -chdir=cloudflare-dns init -backend=false
 terraform -chdir=cloudflare-dns test
 ```
 
+These tests mock the provider, so they cannot see what Cloudflare does with
+a value. A module can also hold tests against the real API, in `tests-real`,
+which `terraform test` runs only when asked. They create real records and
+destroy them at the end: run them before a provider upgrade or a release.
+For `cloudflare-dns`, the zone must exist, and the tests only touch records
+under `tf-test.<zone>`:
+
+```bash
+export CLOUDFLARE_API_TOKEN=...
+terraform -chdir=cloudflare-dns test -test-directory=tests-real -var name=example.com -var account_id=...
+```
+
 ### Release a module
 
 Update the module's `CHANGELOG.md`, then tag the commit with the module prefix
