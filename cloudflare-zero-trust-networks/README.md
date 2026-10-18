@@ -532,7 +532,9 @@ tunnel_warp_connectors = {
 ```
 
 `tunnel_secret` works as for a [tunnel](#tunnel-secret): a new secret gives a
-new token in `tunnel_warp_connector_tokens`. Cloudflare documents virtual
+new token in `tunnel_warp_connector_tokens`. A WARP Connector cannot take the
+name of a tunnel of the account: Cloudflare refuses it with `409 Conflict`
+(error 1013). Cloudflare documents virtual
 networks as not supported by Mesh, although it accepts a route to a WARP
 Connector in any virtual network: leave `virtual_network_id` out, and the
 route goes to the default network.
@@ -681,7 +683,8 @@ plan.
   the current default: the routes created without `virtual_network_id` then
   go to the new one. See [Default network](#default-network).
 - **The same CIDR twice in a virtual network** (error 1014), **the same
-  hostname twice** (error 1108).
+  hostname twice** (error 1108), **the name of a tunnel for a WARP
+  Connector** (error 1013).
 - **A change of HA mode** into or out of `disabled` (error 1135), or between
   `local` and `aws` in one step (error 1056). See
   [HA configuration](#ha-configuration).
