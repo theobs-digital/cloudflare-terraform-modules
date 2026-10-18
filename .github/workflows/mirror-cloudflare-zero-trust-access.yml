@@ -1,0 +1,25 @@
+# Publishes each cloudflare-zero-trust-access release through mirror.yml.
+# Mirror, the repository the Registry reads: terraform-cloudflare-zero-trust-access
+# Its deploy key, with write access: secrets.MIRROR_DEPLOY_KEY_CLOUDFLARE_ZERO_TRUST_ACCESS
+# Both must exist before the first tag.
+name: Mirror cloudflare-zero-trust-access
+
+on:
+  push:
+    tags: ["cloudflare-zero-trust-access/v*"]
+  # For a tag whose commit predates this file: a push runs the workflows of
+  # the tagged commit.
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag to publish, such as cloudflare-zero-trust-access/v1.2.0
+        required: true
+
+jobs:
+  mirror:
+    uses: ./.github/workflows/mirror.yml
+    with:
+      module: cloudflare-zero-trust-access
+      tag: ${{ github.event_name == 'push' && github.ref_name || inputs.tag }}
+    secrets:
+      deploy_key: ${{ secrets.MIRROR_DEPLOY_KEY_CLOUDFLARE_ZERO_TRUST_ACCESS }}

@@ -1,84 +1,25 @@
-# Publishes each cloudflare-dns release to theobs-digital/terraform-cloudflare-dns:
-# the Terraform Registry needs one repository per module, with the module at
-# its root and tags such as v1.2.0. One commit per release, never overwritten.
+# Publishes each cloudflare-dns release through mirror.yml.
+# Mirror, the repository the Registry reads: terraform-cloudflare-dns
+# Its deploy key, with write access: secrets.MIRROR_DEPLOY_KEY_CLOUDFLARE_DNS
+# Both must exist before the first tag.
 name: Mirror cloudflare-dns
 
 on:
   push:
     tags: ["cloudflare-dns/v*"]
+  # For a tag whose commit predates this file: a push runs the workflows of
+  # the tagged commit.
   workflow_dispatch:
     inputs:
       tag:
         description: Release tag to publish, such as cloudflare-dns/v1.2.0
         required: true
 
-permissions:
-  contents: read
-
-concurrency: mirror-cloudflare-dns
-
 jobs:
   mirror:
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    env:
-      TAG: ${{ github.event_name == 'push' && github.ref_name || inputs.tag }}
-      MIRROR: git@github.com:theobs-digital/terraform-cloudflare-dns.git
-      MONOREPO: https://github.com/theobs-digital/cloudflare-terraform-modules
-    defaults:
-      run:
-        shell: bash
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          ref: ${{ env.TAG }}
-          path: monorepo
-          persist-credentials: false
-
-      # A deploy key that can write to the mirror only. GitHub's host key comes
-      # from https://api.github.com/meta, not from ssh-keyscan.
-      - name: Load the deploy key
-        env:
-          DEPLOY_KEY: ${{ secrets.MIRROR_DEPLOY_KEY }}
-        run: |
-          install -d -m 700 ~/.ssh
-          printf '%s\n' "$DEPLOY_KEY" > ~/.ssh/mirror_key
-          chmod 600 ~/.ssh/mirror_key
-          echo "github.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl" > ~/.ssh/known_hosts
-          echo "GIT_SSH_COMMAND=ssh -i $HOME/.ssh/mirror_key -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes" >> "$GITHUB_ENV"
-
-      - name: Publish the release to the mirror
-        run: |
-          [[ $TAG =~ ^cloudflare-dns/v[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "Not a release tag: $TAG"; exit 1; }
-          version=${TAG#cloudflare-dns/}
-          # Build on main, whatever the mirror's default branch. Empty on the
-          # first release only.
-          git clone -q --branch main "$MIRROR" mirror 2> /dev/null || git clone -q "$MIRROR" mirror
-          if git -C mirror rev-parse -q --verify "refs/tags/$version" > /dev/null; then
-            echo "$version is already in the mirror"
-            exit 1
-          fi
-
-          find mirror -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} +
-          cp -a monorepo/cloudflare-dns/. mirror/
-          cp monorepo/LICENSE mirror/
-
-          # Links out of the module folder lead to the monorepo, at the same
-          # tag. The examples' ../../README.md is the module README here too.
-          sed -i -e 's|](\.\./LICENSE)|](LICENSE)|g' -e "s|](\.\./|]($MONOREPO/blob/$TAG/|g" mirror/README.md
-          {
-            head -n 1 mirror/README.md
-            echo
-            echo "> Published from [\`cloudflare-dns\`]($MONOREPO/tree/$TAG/cloudflare-dns) in [cloudflare-terraform-modules]($MONOREPO), where issues and pull requests go."
-            tail -n +2 mirror/README.md
-          } > README.md.new
-          mv README.md.new mirror/README.md
-
-          cd mirror
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -A
-          git commit -q -m "cloudflare-dns $version, from $MONOREPO/releases/tag/$TAG"
-          git tag -a "$version" -m "cloudflare-dns $version"
-          git push -q origin HEAD:main "$version"
-          echo "Published $version: $(git rev-parse --short HEAD)"
+    uses: ./.github/workflows/mirror.yml
+    with:
+      module: cloudflare-dns
+      tag: ${{ github.event_name == 'push' && github.ref_name || inputs.tag }}
+    secrets:
+      deploy_key: ${{ secrets.MIRROR_DEPLOY_KEY_CLOUDFLARE_DNS }}
