@@ -123,3 +123,79 @@ jobs:
       - name: Destroy what the run created
         if: always()
         run: terraform destroy -auto-approve -input=false
+
+  # The same for cloudflare-zero-trust-networks, on the same test account.
+  cloudflare-zero-trust-networks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: bash
+        working-directory: cloudflare-zero-trust-networks/tests-real
+    # Secrets rather than variables: GitHub masks them in the public logs.
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.ZERO_TRUST_TEST_API_TOKEN }}
+      TF_VAR_account_id: ${{ secrets.ZERO_TRUST_TEST_ACCOUNT_ID }}
+      TF_VAR_zone: ${{ secrets.ZERO_TRUST_TEST_ZONE }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
+        with:
+          terraform_version: 1.16.5
+          terraform_wrapper: false
+
+      # Cloudflare never returns it, and another value plans an update: one
+      # secret for apply, plan and destroy.
+      - name: Generate the secret of the test tunnel
+        run: |
+          secret=$(openssl rand -base64 32)
+          echo "::add-mask::$secret"
+          echo "TF_VAR_tunnel_secret=$secret" >> "$GITHUB_ENV"
+
+      - run: terraform init -input=false
+
+      # A run cut short leaves its objects behind, and the next one would fail
+      # on them: delete the tunnels, WARP Connectors and virtual networks named
+      # tf-test-ci-*, and the routes that use them, nothing else. Routes go
+      # first: Cloudflare refuses to delete a tunnel or a virtual network that
+      # routes use.
+      - name: Delete networks objects left under tf-test-ci
+        run: |
+          api="https://api.cloudflare.com/client/v4/accounts/$TF_VAR_account_id"
+          auth="Authorization: Bearer $CLOUDFLARE_API_TOKEN"
+          # The IDs of the objects of a list whose name starts with tf-test-ci-.
+          ids() {
+            curl -sSf -H "$auth" "$api/$1" |
+              jq -r '.result[] | select((.name // "") | startswith("tf-test-ci-")) | .id'
+          }
+          delete() {
+            echo "Deleting $1"
+            curl -sSf -X DELETE -H "$auth" "$api/$1" > /dev/null
+          }
+          tunnels=$(ids "cfd_tunnel?is_deleted=false&per_page=1000")
+          connectors=$(ids "warp_connector?is_deleted=false&per_page=1000")
+          networks=$(ids "teamnet/virtual_networks?is_deleted=false")
+          used=$(printf '%s\n' $tunnels $connectors $networks | jq -Rcn '[inputs | select(. != "")]')
+          for id in $(curl -sSf -H "$auth" "$api/teamnet/routes?is_deleted=false&per_page=1000" |
+            jq -r --argjson used "$used" '.result[] | select(.tunnel_id as $t | .virtual_network_id as $v | $used | index($t) or index($v)) | .id'); do
+            delete "teamnet/routes/$id"
+          done
+          for id in $(curl -sSf -H "$auth" "$api/zerotrust/routes/hostname?is_deleted=false&per_page=1000" |
+            jq -r --argjson used "$used" '.result[] | select(.tunnel_id as $t | $used | index($t)) | .id'); do
+            delete "zerotrust/routes/hostname/$id"
+          done
+          for id in $connectors; do delete "warp_connector/$id"; done
+          for id in $tunnels; do delete "cfd_tunnel/$id"; done
+          for id in $networks; do delete "teamnet/virtual_networks/$id"; done
+
+      - run: terraform apply -auto-approve -input=false
+
+      # Exit code 2: the plan has a change.
+      - run: terraform plan -detailed-exitcode -input=false
+
+      - name: Destroy what the run created
+        if: always()
+        run: terraform destroy -auto-approve -input=false

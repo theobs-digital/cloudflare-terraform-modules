@@ -126,11 +126,11 @@ terraform plan -detailed-exitcode -var account_id=... -var zone=example.com
 terraform destroy -var account_id=... -var zone=example.com
 ```
 
-`cloudflare-zero-trust-networks/tests-real` works the same way, by hand: the
-tunnels, virtual networks and WARP Connectors are named `tf-test-ci-*`, the
-routes take `10.252.0.0/16` and `fd00:252::/48`, and the connectivity settings
-of the account are left alone. Cloudflare never returns the secret of the
-test tunnel: pass the same one to each command.
+`cloudflare-zero-trust-networks/tests-real` works the same way, on the same
+account: the tunnels, virtual networks and WARP Connectors are named
+`tf-test-ci-*`, the routes take `10.252.0.0/16` and `fd00:252::/48`, and the
+connectivity settings of the account are left alone. Cloudflare never returns
+the secret of the test tunnel: pass the same one to each command.
 
 ```bash
 export CLOUDFLARE_API_TOKEN=...
@@ -142,25 +142,26 @@ terraform plan -detailed-exitcode -var account_id=... -var zone=example.com
 terraform destroy -var account_id=... -var zone=example.com
 ```
 
-The [Real API tests](.github/workflows/tests-real.yml) workflow runs those of
-`cloudflare-dns` and `cloudflare-zero-trust-access` every day with the newest
-provider 5.x, and on demand from the Actions tab.
-For `cloudflare-zero-trust-access`, a second plan with a change fails the
-run: that is a provider that drifts from what it applied. It reads these
-repository secrets:
+The [Real API tests](.github/workflows/tests-real.yml) workflow runs them
+every day with the newest provider 5.x, and on demand from the Actions tab.
+For the Zero Trust modules, a second plan with a change fails the run: that
+is a provider that drifts from what it applied. It reads these repository
+secrets:
 
 | Secret | Value |
 |---|---|
 | `CLOUDFLARE_API_TOKEN` | a token for the test zone only: Zone → DNS → Edit and Zone → Zone → Read |
 | `TEST_ZONE` | the name of the test zone |
 | `TEST_ACCOUNT_ID` | the ID of its account |
-| `ZERO_TRUST_TEST_API_TOKEN` | a token for the Zero Trust test account only, with the permissions in the [Quick start](cloudflare-zero-trust-access/README.md#quick-start) of `cloudflare-zero-trust-access` |
+| `ZERO_TRUST_TEST_API_TOKEN` | a token for the Zero Trust test account only, with the permissions in the [Quick start](cloudflare-zero-trust-access/README.md#quick-start) of `cloudflare-zero-trust-access`, plus Cloudflare Tunnel → Edit and Cloudflare One Connector: WARP → Edit for `cloudflare-zero-trust-networks` |
 | `ZERO_TRUST_TEST_ACCOUNT_ID` | the ID of that account |
 | `ZERO_TRUST_TEST_ZONE` | the name of a zone in that account |
 
 Before the tests, the workflow deletes what a run cut short before its
-cleanup leaves behind: `tf-test.<zone>` and every name under it, and the
-Access objects named `tf-test-ci-*`. Keep these names for this workflow only.
+cleanup leaves behind: `tf-test.<zone>` and every name under it, the Access
+objects named `tf-test-ci-*`, and the tunnels, WARP Connectors and virtual
+networks named `tf-test-ci-*` with the routes that use them. Keep these names
+for this workflow only.
 
 ### Release a module
 
