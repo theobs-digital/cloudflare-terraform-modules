@@ -165,19 +165,44 @@ for this workflow only.
 
 ### Release a module
 
-Update the module's `CHANGELOG.md`, then tag the commit with the module prefix
-and push the tag:
+Each pull request writes its changes under `[Unreleased]` in the
+`CHANGELOG.md` of the module it touches, and takes a
+[Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/) title
+scoped by the module, such as `feat(cloudflare-dns): …`. On each push to
+`main`, the [Release](.github/workflows/release.yml) workflow releases each
+module on its own.
 
-```bash
-git tag -a cloudflare-dns/vX.Y.Z -m "cloudflare-dns vX.Y.Z"
-git push origin cloudflare-dns/vX.Y.Z
-```
+When the newest dated section of a module's `CHANGELOG.md`, such as
+`## [1.0.0] - 2026-10-18`, has no tag yet, the workflow tags the commit that
+dated it, `<module>/v1.0.0`: that is how a first version, or any chosen
+version, is released. Otherwise the commits since the module's last tag that
+touch its folder, merge commits left out, give the version, the strongest one
+winning:
 
-The tag also starts the [Mirror cloudflare-dns](.github/workflows/mirror-cloudflare-dns.yml)
-workflow, which publishes the release to `terraform-cloudflare-dns` as
-`vX.Y.Z`, and the Terraform Registry picks it up from there. It pushes with a
-deploy key that can write to that repository only, kept in the
-`MIRROR_DEPLOY_KEY` secret, and never overwrites a version already published.
+| Commits since the last tag | Version |
+|---|---|
+| a `!` after the type, such as `refactor(cloudflare-dns)!:`, or a `BREAKING CHANGE:` footer | major, a minor one before v1.0.0 |
+| `feat:` | minor |
+| `fix:` or `perf:` | patch |
+| only other types, such as `ci:`, `docs:`, `test:` or `chore:` | none: the changes wait for the next version |
+
+The workflow then dates the `[Unreleased]` section, bumps the module's tag in
+the `?ref=` of the READMEs and in the *Latest release* column above, and
+commits `chore(<module>): release vX.Y.Z`. It fails for a module whose
+`[Unreleased]` is empty, and still releases the others.
+
+It pushes that commit to `main` with the deploy key of the
+`RELEASE_DEPLOY_KEY` secret, which the rule that protects `main` lets
+through, and the tags with the workflow's own token. It then creates each
+GitHub release, with the module's section of its `CHANGELOG.md` as notes, and
+starts the module's mirror workflow, such as
+[Mirror cloudflare-dns](.github/workflows/mirror-cloudflare-dns.yml), which
+publishes the release to `terraform-cloudflare-dns` as `vX.Y.Z`, where the
+Terraform Registry picks it up. A mirror pushes with a deploy key that can
+write to its repository only, kept in a secret per module, such as
+`MIRROR_DEPLOY_KEY_CLOUDFLARE_DNS`, and never overwrites a version already
+published. A tag pushed by hand, `<module>/vX.Y.Z`, also gets its release
+and its mirror.
 
 ## License
 

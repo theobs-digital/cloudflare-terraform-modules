@@ -1,0 +1,177 @@
+# Releases the modules: the repository root, or each folder of a monorepository
+# with its versions.tf and CHANGELOG.md. On each push to main, for each module:
+# - the newest dated section of its CHANGELOG, if no tag has it, is tagged on
+#   the commit that dated it, such as a first v1.0.0;
+# - otherwise the commits since its last tag that touch it give the version
+#   (Conventional Commits): a "!" or a BREAKING CHANGE footer a major release,
+#   a minor one before 1.0.0; feat a minor one; fix and perf a patch; any
+#   other type none. The run dates [Unreleased], bumps the ?ref= of the
+#   Markdown files, and commits "chore: release vX.Y.Z".
+# Then it pushes main, with the deploy key RELEASE_DEPLOY_KEY where a ruleset
+# protects it, and the tags with the GITHUB_TOKEN, which starts no workflow:
+# this run creates each GitHub release and starts each mirror itself. A tag
+# pushed by hand gets its release too; run it by hand for an older tag.
+name: Release
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*", "*/v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Tag to publish, such as v1.2.0 or cloudflare-dns/v1.2.0
+        required: true
+
+permissions:
+  contents: write
+  # gh workflow run, for the mirrors.
+  actions: write
+
+# One run at a time on main, which computes the next versions.
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      # The whole history and its tags. Without the secret, the GITHUB_TOKEN.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        if: github.ref_type == 'branch' && github.event_name == 'push'
+        with:
+          fetch-depth: 0
+          ssh-key: ${{ secrets.RELEASE_DEPLOY_KEY }}
+
+      - name: Tag the versions the commits call for
+        id: tag
+        if: github.ref_type == 'branch' && github.event_name == 'push'
+        env:
+          DEPLOY_KEY: ${{ secrets.RELEASE_DEPLOY_KEY != '' }}
+        run: |
+          repo=${GH_REPO#*/}
+          if [ -f CHANGELOG.md ] && [ -f versions.tf ]; then
+            modules=.
+          else
+            modules=$(for d in */; do [ -f "${d}versions.tf" ] && [ -f "${d}CHANGELOG.md" ] && echo "${d%/}"; done || true)
+            [ -n "$modules" ] || { echo "No module: nothing to tag"; exit 0; }
+            if [ "$DEPLOY_KEY" != true ]; then
+              echo "::warning::No secret RELEASE_DEPLOY_KEY to push to the protected main: the tags stay manual"
+              exit 0
+            fi
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          # Escapes a string for sed -E.
+          esc() { sed 's/[][\.*^$?+(){}|/]/\\&/g' <<< "$1"; }
+          tags=() failed=0
+          for m in $modules; do
+            if [ "$m" = . ]; then
+              dir= prefix=v name=$repo pin="$repo.git?ref="
+            else
+              dir=$m/ prefix=$m/v name=$m pin="?ref="
+            fi
+            changelog=${dir}CHANGELOG.md
+            last=$(git describe --tags --abbrev=0 --match "${prefix}[0-9]*.[0-9]*.[0-9]*" 2> /dev/null || true)
+            dated=$(grep -m 1 -oE '^## \[[0-9]+\.[0-9]+\.[0-9]+\]' "$changelog" | grep -oE '[0-9.]+[0-9]' || true)
+            if [ -n "$dated" ] && [ "$prefix$dated" != "$last" ] &&
+              [ "$(printf '%s\n' "${last#"$prefix"}" "$dated" | sort -V | tail -n 1)" = "$dated" ]; then
+              sha=$(git log --format=%H -S"## [$dated]" -- "$changelog" | tail -n 1)
+              git tag -a "$prefix$dated" "$sha" -m "$name v$dated"
+              echo "$prefix$dated: dated by $(git log -1 --format='%h %s' "$sha")"
+              tags+=("$prefix$dated")
+              continue
+            fi
+            range=${last:+$last..}HEAD
+            subjects=$(git log --no-merges --format=%s "$range" -- "${dir:-.}")
+            bodies=$(git log --no-merges --format=%b "$range" -- "${dir:-.}")
+            if grep -qE '^[a-z]+(\([^)]*\))?!:' <<< "$subjects" || grep -qE '^BREAKING[ -]CHANGE:' <<< "$bodies"; then
+              bump=major
+            elif grep -qE '^feat(\([^)]*\))?:' <<< "$subjects"; then
+              bump=minor
+            elif grep -qE '^(fix|perf)(\([^)]*\))?:' <<< "$subjects"; then
+              bump=patch
+            else
+              echo "$name: no feat, fix, perf or breaking change since ${last:-the first commit}"
+              continue
+            fi
+            IFS=. read -r major minor patch <<< "${last#"$prefix"}"
+            major=${major:-0} minor=${minor:-0} patch=${patch:-0}
+            case $bump in
+              major) if [ "$major" -eq 0 ]; then minor=$((minor + 1)) patch=0; else major=$((major + 1)) minor=0 patch=0; fi ;;
+              minor) minor=$((minor + 1)) patch=0 ;;
+              patch) patch=$((patch + 1)) ;;
+            esac
+            version="$major.$minor.$patch" tag="$prefix$major.$minor.$patch"
+            # The pull requests write their changes under [Unreleased]: none is a forgotten CHANGELOG.
+            unreleased=$(awk '/^## \[Unreleased\]/ { found = 1; next } found && (/^## \[/ || /^\[[^]]+\]: /) { exit } found { print }' "$changelog")
+            if ! grep -q '[^[:space:]]' <<< "$unreleased"; then
+              echo "::error::$changelog has nothing under [Unreleased] for $tag"
+              failed=1
+              continue
+            fi
+            sed -i "0,/^## \[Unreleased\]\$/s//## [Unreleased]\n\n## [$version] - $(date -u +%F)/" "$changelog"
+            sed -i -E "s#^\[Unreleased\]: (.+)/compare/(.+)\.\.\.(.+)\$#[Unreleased]: \1/compare/$tag...\3\n[$version]: \1/compare/\2...$tag#" "$changelog"
+            # The Markdown files name the module by its tag: the ?ref= of the examples, the latest release links.
+            if [ -n "$last" ]; then
+              { git grep -lF "$last" -- '*.md' ':!*CHANGELOG.md' || true; } | xargs -r sed -i -E \
+                -e "s#$(esc "$pin$last")([\"\`])#$pin$tag\1#g" -e "s#\[\`$(esc "$last")\`\]\(#[\`$tag\`](#g"
+            fi
+            if [ "$m" = . ]; then git commit -qam "chore: release $tag"; else git commit -qam "chore($m): release v$version"; fi
+            git tag -a "$tag" -m "$name v$version"
+            tags+=("$tag")
+          done
+          if [ ${#tags[@]} -gt 0 ]; then
+            git push -q origin HEAD:refs/heads/main
+            if [ "$DEPLOY_KEY" = true ]; then
+              git push -q "https://x-access-token:$GH_TOKEN@github.com/$GH_REPO.git" "${tags[@]/#/refs/tags/}"
+            else
+              git push -q origin "${tags[@]/#/refs/tags/}"
+            fi
+          fi
+          echo "tags=${tags[*]}" >> "$GITHUB_OUTPUT"
+          exit "$failed"
+
+      - name: Create the releases from the CHANGELOG, and start the mirrors
+        # Also after a module whose CHANGELOG failed: the other tags are pushed.
+        if: ${{ !cancelled() && (steps.tag.outputs.tags != '' || github.ref_type == 'tag' || github.event_name == 'workflow_dispatch') }}
+        env:
+          TAGS: ${{ steps.tag.outputs.tags || (github.ref_type == 'tag' && github.ref_name) || inputs.tag }}
+          # A tag pushed by hand starts its mirror by itself.
+          START_MIRRORS: ${{ steps.tag.outputs.tags != '' }}
+        run: |
+          for TAG in $TAGS; do
+            if gh release view "$TAG" > /dev/null 2>&1; then
+              echo "$TAG is already released"
+              continue
+            fi
+            version=${TAG##*v}
+            module=${TAG%v"$version"}
+            changelog="${module}CHANGELOG.md"
+            gh api "repos/$GH_REPO/contents/$changelog?ref=$TAG" -H "Accept: application/vnd.github.raw" > "$RUNNER_TEMP/CHANGELOG.md"
+            # From "## [X.Y.Z]" to the next version or the link definitions.
+            awk -v head="## [$version]" '
+              index($0, head) == 1 { found = 1; next }
+              found && (/^## \[/ || /^\[[^]]+\]: /) { exit }
+              found { print }
+            ' "$RUNNER_TEMP/CHANGELOG.md" > "$RUNNER_TEMP/notes.md"
+            if ! grep -q '[^[:space:]]' "$RUNNER_TEMP/notes.md"; then
+              echo "::error::$changelog has no section for $version"
+              exit 1
+            fi
+            name=${module%/}
+            gh release create "$TAG" --verify-tag --title "${name:-${GH_REPO#*/}} v$version" --notes-file "$RUNNER_TEMP/notes.md"
+            if [ "$START_MIRRORS" = true ] && [ -n "$name" ] &&
+              gh api "repos/$GH_REPO/contents/.github/workflows/mirror-$name.yml" > /dev/null 2>&1; then
+              gh workflow run "mirror-$name.yml" --ref main -f tag="$TAG"
+              echo "Started the mirror of $TAG"
+            fi
+          done
