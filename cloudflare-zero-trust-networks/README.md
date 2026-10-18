@@ -616,7 +616,11 @@ connectivity_settings = {
 **`icmp_proxy_enabled`** is the **ICMP** box of **Allow Secure Web Gateway to
 proxy traffic**, in **Traffic policies** > **Traffic settings**.
 **`offramp_warp_enabled`** is WARP-to-WARP traffic, as the API reference
-calls it; it is checked on the API only.
+calls it: the former **Allow WARP to WARP connection**, in **Team & Resources**
+> **Devices** > **Management** > **Peer to peer connectivity**, which
+Cloudflare's Mesh documentation now calls **Allow all Cloudflare One traffic
+to reach enrolled devices**. The dashboard of the test account showed neither
+on 18 October 2026: the setting is checked on the API only.
 
 Every account has these settings, and the provider only updates them: the
 first apply writes them over the current ones. To start from the current
