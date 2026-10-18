@@ -258,3 +258,40 @@ variable "device_posture_rules" {
   }))
   default = {}
 }
+
+variable "device_subnets" {
+  description = "Device subnets, from which a device takes its IP, by a key of your choice, with the attributes of `cloudflare_zero_trust_device_subnet` under the same names. Cloudflare refuses to change `network`: declare the new range under a new key, created before the old one is deleted. `is_default_network = true` takes the default from the former default subnet, outside Terraform; Cloudflare refuses `false` on the default subnet. Write `comment` and `is_default_network` of an imported subnet, see [Device IP profiles and subnets](#device-ip-profiles-and-subnets)."
+  type = map(object({
+    name               = string
+    network            = string
+    comment            = optional(string)
+    is_default_network = optional(bool)
+  }))
+  default = {}
+}
+
+variable "device_ip_profiles" {
+  description = "Device IP profiles, which choose the subnet of a device, by a key of your choice, with the attributes of `cloudflare_zero_trust_device_ip_profile` under the same names. Take `subnet_id` from the `device_subnet_ids` output. Cloudflare refuses a `precedence` that another IP profile holds (error 2808). Removing `description` keeps it in Cloudflare: write `\"\"` to clear it, see [Device IP profiles and subnets](#device-ip-profiles-and-subnets)."
+  type = map(object({
+    match       = string
+    name        = string
+    precedence  = number
+    subnet_id   = string
+    description = optional(string)
+    enabled     = optional(bool)
+  }))
+  default = {}
+}
+
+variable "device_deployment_groups" {
+  description = "Deployment groups, which set the WARP client version of the devices of their profiles, by a key of your choice, with the attributes of `cloudflare_zero_trust_device_deployment_groups` under the same names. `version` is a full release number, such as `2026.8.2110.0`. Take `policy_ids` from the `device_custom_profile_ids` and `device_default_profile_policy_id` outputs; a profile belongs to one group at most. Once a group holds profiles, it keeps at least one: Cloudflare refuses `policy_ids = []` and ignores a removed `policy_ids`, see [Deployment groups](#deployment-groups)."
+  type = map(object({
+    name = string
+    version_config = list(object({
+      target_environment = string
+      version            = string
+    }))
+    policy_ids = optional(list(string))
+  }))
+  default = {}
+}

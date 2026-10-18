@@ -29,7 +29,8 @@ permissions:
 
 | Permission | Operations |
 |---|---|
-| Account → Zero Trust → Edit | device settings, default and custom profiles, their local domain fallbacks, managed networks, posture integrations and rules |
+| Account → Zero Trust → Edit | device settings, default and custom profiles, their local domain fallbacks, managed networks, posture integrations and rules, device IP profiles, deployment groups |
+| Account → Cloudflare One Networks → Edit | `device_subnets` |
 | Zone → SSL and Certificates → Edit | `device_default_profile_certificates`, on each zone it lists |
 
 ## Settings
@@ -543,6 +544,172 @@ Removing an entry deletes the rule in Cloudflare.
 `device_posture` rules of Access groups and policies, and the
 `device_posture.checks.passed` expressions of Gateway policies.
 
+## Device IP profiles and subnets
+
+A device gets its IPv4 address from a subnet of the account when it
+registers. `device_subnets` declares subnets, and `device_ip_profiles` chooses
+the subnet of each device: the first profile whose `match` is true, in
+increasing `precedence`. A device keeps its address until it registers
+again.
+Cloudflare's documentation sets these conditions: client 2025.10.186.0 or
+later on Windows, macOS or Linux, the global device setting *Assign a unique
+IP address to each device*, and 30 IP profiles at most.
+
+```hcl
+  device_subnets = {
+    engineering = { name = "Engineering", network = "10.80.0.0/16" }
+  }
+
+  device_ip_profiles = {
+    engineering = {
+      name       = "Engineering"
+      match      = "identity.groups.name == \"Engineering\""
+      precedence = 100
+      subnet_id  = module.devices.device_subnet_ids["engineering"]
+    }
+  }
+```
+
+`network` is an IPv4 range of `/24` or larger within `10.0.0.0/8`,
+`172.16.0.0/12`, `192.168.0.0/16` or `100.64.0.0/10`. On 18 October 2026,
+Cloudflare refused a `/25` (`Subnet range is too small`, error 1098), a
+public range and an IPv6 range (error 1090), and a range that overlaps
+another subnet (`This subnet conflicts with other subnets or routes`, 409,
+error 1027).
+
+Cloudflare refuses to change the `network` of a subnet (`Operation "modify
+IPv4 subnet" is not allowed`, error 1090), although the provider plans the
+change as an update in place. Declare the new range under a new key instead,
+move the IP profiles to it, and remove the old key, in the same apply.
+Cloudflare refuses to delete a subnet that an IP profile uses (`Cannot delete
+subnet because there are still references from IP profiles`, error 1121), so
+the module creates subnets with `create_before_destroy`: Terraform then
+updates the profiles before it deletes the old subnet. On 18 October 2026,
+this apply went through, where the same apply without
+`create_before_destroy` deleted the subnet first and failed. To rename the key
+of a subnet, use a `moved` block: a new key creates the new subnet first, on
+the same range, which Cloudflare refuses.
+
+```hcl
+moved {
+  from = module.devices.cloudflare_zero_trust_device_subnet.this["eng"]
+  to   = module.devices.cloudflare_zero_trust_device_subnet.this["engineering"]
+}
+```
+
+The account holds one default subnet for each IP family, which Cloudflare
+created with the organization. `is_default_network = true` moves the default
+to another subnet: Cloudflare sets the former default to `false`, outside
+Terraform. It refuses a change of the default subnet to `false` (`there must
+always be a default subnet for each IP family and subnet type`, error 1094):
+set `true` on another subnet instead. The organization tested on 18 October
+2026 held these two default subnets of the `warp` type, which the module
+imported with no change:
+
+```hcl
+  device_subnets = {
+    default_ipv4 = {
+      name               = "Subnet of CGNAT"
+      network            = "100.96.0.0/12"
+      comment            = "Default IPv4 subnet"
+      is_default_network = true
+    }
+    default_ipv6 = {
+      name               = "Default WARP Cloudflare One Subnet"
+      network            = "2606:4700:cf1:1000::/64"
+      is_default_network = true
+    }
+  }
+```
+
+Write `comment` and `is_default_network` as Cloudflare holds them: left out,
+they take the provider defaults, `""` and `false`, which the plan shows as
+changes. List the subnets of the account to find their IDs, names and
+comments; the resource manages those of the `warp` type, not the
+`cloudflare_source` and `initial_resolved_ip` ones that the list also holds:
+
+```bash
+curl -s "https://api.cloudflare.com/client/v4/accounts/$ACCOUNT_ID/zerotrust/subnets" \
+  -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN"
+```
+
+`match` of an IP profile is a wirefilter expression on the identity of the
+user: `identity.email`, `identity.name`, `identity.groups.id`,
+`identity.groups.name`, `identity.groups.email` and
+`identity.saml_attributes`. Each `precedence` must be unique among IP
+profiles (`IP profile precedence must be unique`, error 2808): reorder them
+as custom profiles, through values that no profile holds. `enabled` is `true`
+unless written.
+
+Removing `description` from an IP profile keeps it in Cloudflare, which
+ignores the `null` the provider sends, and each plan shows the removal again.
+`description = ""` clears it; Cloudflare then returns no description, so
+remove the line after that apply, or each plan shows `""` again.
+
+Adopt an existing subnet or IP profile with an `import` block, whose ID is
+`<account_id>/<subnet_id>` or `<account_id>/<profile_id>`. Removing an entry
+deletes the subnet or the IP profile in Cloudflare.
+
+## Deployment groups
+
+`device_deployment_groups` sets the version of the WARP client on the devices
+of some profiles: Cloudflare sends it to the Windows and macOS devices whose
+profile is in `policy_ids`, and they install it themselves, from client
+2026.6.0 on. Each entry of `version_config` gives a `target_environment`,
+`windows` or `macos`, and the `version` to run there. Cloudflare's API marks
+deployment groups as beta.
+
+```hcl
+  device_deployment_groups = {
+    ring0 = {
+      name = "Ring 0"
+      version_config = [
+        { target_environment = "windows", version = "2026.8.2110.0" },
+        { target_environment = "macos", version = "2026.8.2110.0" },
+      ]
+      policy_ids = [module.devices.device_custom_profile_ids["it"]]
+    }
+  }
+```
+
+`version` is a full release number, as the
+[client changelog](https://developers.cloudflare.com/cloudflare-one/changelog/cloudflare-one-client/)
+lists them. On 18 October 2026, Cloudflare refused the short form
+`2026.6.0` that its documentation shows (`invalid version format`,
+error 2020), and a release that does not exist for the platform (`version
+2026.6.234.0 not found for platform windows`, error 2030). It refused
+`linux` (`target_environment must be macos or windows`, error 2905), and a
+platform twice in one group (error 2902). It keeps `version_config` in the
+order written.
+
+`policy_ids` takes the IDs of custom profiles, from the
+`device_custom_profile_ids` output, and the default profile, from
+`device_default_profile_policy_id`. Cloudflare checks that they exist
+(`one or more policies do not exist`, error 2902). The default profile's
+policy ID is not the ID of its resource, which is the account ID: the output
+gives it when `device_default_profile` is set. Write the default profile as
+Cloudflare holds it, see [Default profile](#default-profile): when its plan
+shows an empty update, its `policy_id` is unknown until the apply, and each
+group that lists it shows an update too.
+
+A profile belongs to one group at most: Cloudflare refuses a profile that
+another group holds (`policy already assigned to another deployment group`,
+409, error 2903). Terraform updates both groups at once when a profile moves
+from one to the other; on 18 October 2026, moving a profile one way and back
+in one apply worked 9 times out of 9.
+
+Once a group holds profiles, it keeps at least one. Cloudflare refuses
+`policy_ids = []` (`policy_ids cannot be an empty array`, error 2902), and
+ignores the `null` that the provider sends for a `policy_ids` removed from the
+configuration: the group keeps its profiles, and each plan shows the removal
+again. To take its last profile out, give it another one, or remove the
+group. A group created without `policy_ids` targets no device, and plans no
+change.
+
+Adopt an existing group with an `import` block, whose ID is
+`<account_id>/<group_id>`: on 18 October 2026, two groups imported with no
+change. Removing an entry deletes the group in Cloudflare.
+
 <!-- BEGIN_TF_DOCS -->
 ## Requirements
 
@@ -566,10 +733,13 @@ Removing an entry deletes the rule in Cloudflare.
 | [cloudflare_zero_trust_device_default_profile.this](https://registry.terraform.io/providers/cloudflare/cloudflare/latest/docs/resources/zero_trust_device_default_profile) | resource |
 | [cloudflare_zero_trust_device_default_profile_certificates.this](https://registry.terraform.io/providers/cloudflare/cloudflare/latest/docs/resources/zero_trust_device_default_profile_certificates) | resource |
 | [cloudflare_zero_trust_device_default_profile_local_domain_fallback.this](https://registry.terraform.io/providers/cloudflare/cloudflare/latest/docs/resources/zero_trust_device_default_profile_local_domain_fallback) | resource |
+| [cloudflare_zero_trust_device_deployment_groups.this](https://registry.terraform.io/providers/cloudflare/cloudflare/latest/docs/resources/zero_trust_device_deployment_groups) | resource |
+| [cloudflare_zero_trust_device_ip_profile.this](https://registry.terraform.io/providers/cloudflare/cloudflare/latest/docs/resources/zero_trust_device_ip_profile) | resource |
 | [cloudflare_zero_trust_device_managed_networks.this](https://registry.terraform.io/providers/cloudflare/cloudflare/latest/docs/resources/zero_trust_device_managed_networks) | resource |
 | [cloudflare_zero_trust_device_posture_integration.this](https://registry.terraform.io/providers/cloudflare/cloudflare/latest/docs/resources/zero_trust_device_posture_integration) | resource |
 | [cloudflare_zero_trust_device_posture_rule.this](https://registry.terraform.io/providers/cloudflare/cloudflare/latest/docs/resources/zero_trust_device_posture_rule) | resource |
 | [cloudflare_zero_trust_device_settings.this](https://registry.terraform.io/providers/cloudflare/cloudflare/latest/docs/resources/zero_trust_device_settings) | resource |
+| [cloudflare_zero_trust_device_subnet.this](https://registry.terraform.io/providers/cloudflare/cloudflare/latest/docs/resources/zero_trust_device_subnet) | resource |
 
 ## Inputs
 
@@ -581,10 +751,13 @@ Removing an entry deletes the rule in Cloudflare.
 | <a name="input_device_default_profile"></a> [device\_default\_profile](#input\_device\_default\_profile) | Default device profile of the account, with the attributes of `cloudflare_zero_trust_device_default_profile` under the same names. When `null`, the module leaves it alone. Adopt it with an `import` block: without one, the first apply writes the provider default of each attribute left out, such as `tunnel_protocol = ""`. Write `exclude` or `include`, `service_mode_v2` and `dns_search_suffixes` as Cloudflare holds them, or each plan shows an empty update. Removing this argument changes nothing in Cloudflare, see [Default profile](#default-profile). | <pre>object({<br/>    allow_mode_switch     = optional(bool)<br/>    allow_updates         = optional(bool)<br/>    allowed_to_leave      = optional(bool)<br/>    auto_connect          = optional(number)<br/>    captive_portal        = optional(number)<br/>    disable_auto_fallback = optional(bool)<br/>    dns_search_suffixes = optional(list(object({<br/>      suffix      = string<br/>      description = optional(string)<br/>    })))<br/>    exclude = optional(list(object({<br/>      address     = optional(string)<br/>      description = optional(string)<br/>      host        = optional(string)<br/>    })))<br/>    exclude_office_ips = optional(bool)<br/>    global_acceleration = optional(object({<br/>      api_endpoints       = list(string)<br/>      enabled             = bool<br/>      masque_endpoints    = list(string)<br/>      wireguard_endpoints = list(string)<br/>    }))<br/>    include = optional(list(object({<br/>      address     = optional(string)<br/>      description = optional(string)<br/>      host        = optional(string)<br/>    })))<br/>    lan_allow_minutes              = optional(number)<br/>    lan_allow_subnet_size          = optional(number)<br/>    register_interface_ip_with_dns = optional(bool)<br/>    sccm_vpn_boundary_support      = optional(bool)<br/>    service_mode_v2 = optional(object({<br/>      mode = optional(string)<br/>      port = optional(number)<br/>    }))<br/>    support_url          = optional(string)<br/>    switch_locked        = optional(bool)<br/>    tunnel_protocol      = optional(string)<br/>    uninstall_protection = optional(bool)<br/>    virtual_networks = optional(object({<br/>      allowed = list(string)<br/>      default = string<br/>    }))<br/>  })</pre> | `null` | no |
 | <a name="input_device_default_profile_certificates"></a> [device\_default\_profile\_certificates](#input\_device\_default\_profile\_certificates) | Device client certificates, one entry per zone, by a key of your choice, with the attributes of `cloudflare_zero_trust_device_default_profile_certificates` under the same names. Removing an entry changes nothing in Cloudflare: apply `enabled = false` first to turn the certificate off, see [Device certificates](#device-certificates). | <pre>map(object({<br/>    enabled = bool<br/>    zone_id = string<br/>  }))</pre> | `{}` | no |
 | <a name="input_device_default_profile_local_domain_fallback"></a> [device\_default\_profile\_local\_domain\_fallback](#input\_device\_default\_profile\_local\_domain\_fallback) | Local domain fallback of the default profile, with the attributes of `cloudflare_zero_trust_device_default_profile_local_domain_fallback` under the same names. When `null`, the module leaves it alone. `domains` replaces the whole list, Cloudflare's default domains included. Removing this argument changes nothing in Cloudflare, see [Local domain fallback](#local-domain-fallback). | <pre>object({<br/>    domains = set(object({<br/>      suffix      = string<br/>      description = optional(string)<br/>      dns_server  = optional(list(string))<br/>    }))<br/>  })</pre> | `null` | no |
+| <a name="input_device_deployment_groups"></a> [device\_deployment\_groups](#input\_device\_deployment\_groups) | Deployment groups, which set the WARP client version of the devices of their profiles, by a key of your choice, with the attributes of `cloudflare_zero_trust_device_deployment_groups` under the same names. `version` is a full release number, such as `2026.8.2110.0`. Take `policy_ids` from the `device_custom_profile_ids` and `device_default_profile_policy_id` outputs; a profile belongs to one group at most. Once a group holds profiles, it keeps at least one: Cloudflare refuses `policy_ids = []` and ignores a removed `policy_ids`, see [Deployment groups](#deployment-groups). | <pre>map(object({<br/>    name = string<br/>    version_config = list(object({<br/>      target_environment = string<br/>      version            = string<br/>    }))<br/>    policy_ids = optional(list(string))<br/>  }))</pre> | `{}` | no |
+| <a name="input_device_ip_profiles"></a> [device\_ip\_profiles](#input\_device\_ip\_profiles) | Device IP profiles, which choose the subnet of a device, by a key of your choice, with the attributes of `cloudflare_zero_trust_device_ip_profile` under the same names. Take `subnet_id` from the `device_subnet_ids` output. Cloudflare refuses a `precedence` that another IP profile holds (error 2808). Removing `description` keeps it in Cloudflare: write `""` to clear it, see [Device IP profiles and subnets](#device-ip-profiles-and-subnets). | <pre>map(object({<br/>    match       = string<br/>    name        = string<br/>    precedence  = number<br/>    subnet_id   = string<br/>    description = optional(string)<br/>    enabled     = optional(bool)<br/>  }))</pre> | `{}` | no |
 | <a name="input_device_managed_networks"></a> [device\_managed\_networks](#input\_device\_managed\_networks) | Managed networks, by a key of your choice, with the attributes of `cloudflare_zero_trust_device_managed_networks` under the same names. `config.sha256` defaults to `""`, which Cloudflare returns for a network without fingerprint. Custom profiles match a network by its `name`, which Cloudflare does not check, see [Managed networks](#managed-networks). | <pre>map(object({<br/>    config = object({<br/>      tls_sockaddr = string<br/>      sha256       = optional(string, "")<br/>    })<br/>    name = string<br/>    type = string<br/>  }))</pre> | `{}` | no |
 | <a name="input_device_posture_integrations"></a> [device\_posture\_integrations](#input\_device\_posture\_integrations) | Device posture integrations with third-party providers, by a key of your choice, with the attributes of `cloudflare_zero_trust_device_posture_integration` under the same names. Cloudflare checks the credentials with the provider when it creates the integration, and creates nothing if they fail (error 2046). Pass `config.client_secret`, `config.client_key` and `config.access_client_secret` from sensitive variables, without marking the map sensitive, see [Device posture integrations](#device-posture-integrations). | <pre>map(object({<br/>    config = object({<br/>      access_client_id     = optional(string)<br/>      access_client_secret = optional(string)<br/>      api_url              = optional(string)<br/>      auth_url             = optional(string)<br/>      client_id            = optional(string)<br/>      client_key           = optional(string)<br/>      client_secret        = optional(string)<br/>      customer_id          = optional(string)<br/>    })<br/>    interval = string<br/>    name     = string<br/>    type     = string<br/>  }))</pre> | `{}` | no |
 | <a name="input_device_posture_rules"></a> [device\_posture\_rules](#input\_device\_posture\_rules) | Device posture rules, by a key of your choice, with the attributes of `cloudflare_zero_trust_device_posture_rule` under the same names. `input` takes the fields of the rule `type`; take `input.connection_id` from the `device_posture_integration_ids` output. Leave `input.operating_system` out: Cloudflare drops it, and each plan shows it again. Write `schedule`, `5m` by default, or an imported rule plans a change. Removing `description` keeps it in Cloudflare, see [Device posture rules](#device-posture-rules). | <pre>map(object({<br/>    type        = string<br/>    description = optional(string)<br/>    expiration  = optional(string)<br/>    input = optional(object({<br/>      active_threats     = optional(number)<br/>      auth_state         = optional(list(string))<br/>      certificate_id     = optional(string)<br/>      check_disks        = optional(list(string))<br/>      check_private_key  = optional(bool)<br/>      cn                 = optional(string)<br/>      compliance_status  = optional(string)<br/>      connection_id      = optional(string)<br/>      count_operator     = optional(string)<br/>      domain             = optional(string)<br/>      eid_last_seen      = optional(string)<br/>      enabled            = optional(bool)<br/>      exists             = optional(bool)<br/>      extended_key_usage = optional(list(string))<br/>      id                 = optional(string)<br/>      infected           = optional(bool)<br/>      is_active          = optional(bool)<br/>      issue_count        = optional(string)<br/>      last_seen          = optional(string)<br/>      locations = optional(object({<br/>        paths        = optional(list(string))<br/>        trust_stores = optional(list(string))<br/>      }))<br/>      network_status            = optional(string)<br/>      operating_system          = optional(string)<br/>      operational_state         = optional(string)<br/>      operator                  = optional(string)<br/>      os                        = optional(string)<br/>      os_distro_name            = optional(string)<br/>      os_distro_revision        = optional(string)<br/>      os_version_extra          = optional(string)<br/>      overall                   = optional(string)<br/>      path                      = optional(string)<br/>      require_all               = optional(bool)<br/>      risk_level                = optional(string)<br/>      score                     = optional(number)<br/>      score_operator            = optional(string)<br/>      sensor_config             = optional(string)<br/>      sha256                    = optional(string)<br/>      state                     = optional(string)<br/>      subject_alternative_names = optional(list(string))<br/>      thumbprint                = optional(string)<br/>      total_score               = optional(number)<br/>      update_window_days        = optional(number)<br/>      version                   = optional(string)<br/>      version_operator          = optional(string)<br/>    }))<br/>    match = optional(list(object({<br/>      platform = optional(string)<br/>    })))<br/>    name     = optional(string)<br/>    schedule = optional(string)<br/>  }))</pre> | `{}` | no |
 | <a name="input_device_settings"></a> [device\_settings](#input\_device\_settings) | Device settings of the account, with the attributes of `cloudflare_zero_trust_device_settings` under the same names. When `null`, the module leaves them alone. Write every field Cloudflare returns: one left out shows as a change to `null` at each plan, which Cloudflare refuses (error 2024). Removing this argument resets the settings, see [Settings](#settings). | <pre>object({<br/>    disable_for_time                      = optional(number)<br/>    external_emergency_signal_enabled     = optional(bool)<br/>    external_emergency_signal_fingerprint = optional(string)<br/>    external_emergency_signal_interval    = optional(string)<br/>    external_emergency_signal_url         = optional(string)<br/>    gateway_proxy_enabled                 = optional(bool)<br/>    gateway_udp_proxy_enabled             = optional(bool)<br/>    root_certificate_installation_enabled = optional(bool)<br/>    use_zt_virtual_ip                     = optional(bool)<br/>  })</pre> | `null` | no |
+| <a name="input_device_subnets"></a> [device\_subnets](#input\_device\_subnets) | Device subnets, from which a device takes its IP, by a key of your choice, with the attributes of `cloudflare_zero_trust_device_subnet` under the same names. Cloudflare refuses to change `network`: declare the new range under a new key, created before the old one is deleted. `is_default_network = true` takes the default from the former default subnet, outside Terraform; Cloudflare refuses `false` on the default subnet. Write `comment` and `is_default_network` of an imported subnet, see [Device IP profiles and subnets](#device-ip-profiles-and-subnets). | <pre>map(object({<br/>    name               = string<br/>    network            = string<br/>    comment            = optional(string)<br/>    is_default_network = optional(bool)<br/>  }))</pre> | `{}` | no |
 
 ## Outputs
 
@@ -592,9 +765,13 @@ Removing an entry deletes the rule in Cloudflare.
 | ---- | ----------- |
 | <a name="output_device_custom_profile_ids"></a> [device\_custom\_profile\_ids](#output\_device\_custom\_profile\_ids) | IDs of the custom profiles, by key of `device_custom_profiles`: the `policy_id` that `device_custom_profile_local_domain_fallbacks` takes. |
 | <a name="output_device_custom_profile_local_domain_fallback_ids"></a> [device\_custom\_profile\_local\_domain\_fallback\_ids](#output\_device\_custom\_profile\_local\_domain\_fallback\_ids) | IDs of the local domain fallbacks of custom profiles, by key of `device_custom_profile_local_domain_fallbacks`. Each one is the ID of its profile. |
+| <a name="output_device_default_profile_policy_id"></a> [device\_default\_profile\_policy\_id](#output\_device\_default\_profile\_policy\_id) | Policy ID of the default profile, which `device_deployment_groups` takes in `policy_ids`, when `device_default_profile` is set; `null` otherwise. The ID of the resource is the account ID. |
+| <a name="output_device_deployment_group_ids"></a> [device\_deployment\_group\_ids](#output\_device\_deployment\_group\_ids) | IDs of the deployment groups, by key of `device_deployment_groups`. |
+| <a name="output_device_ip_profile_ids"></a> [device\_ip\_profile\_ids](#output\_device\_ip\_profile\_ids) | IDs of the device IP profiles, by key of `device_ip_profiles`. |
 | <a name="output_device_managed_network_ids"></a> [device\_managed\_network\_ids](#output\_device\_managed\_network\_ids) | IDs of the managed networks, by key of `device_managed_networks`. |
 | <a name="output_device_posture_integration_ids"></a> [device\_posture\_integration\_ids](#output\_device\_posture\_integration\_ids) | IDs of the device posture integrations, by key of `device_posture_integrations`: the `input.connection_id` of a rule that checks a third-party provider. |
 | <a name="output_device_posture_rule_ids"></a> [device\_posture\_rule\_ids](#output\_device\_posture\_rule\_ids) | IDs of the device posture rules, by key of `device_posture_rules`, for the `device_posture` rules of Access groups and policies and the `device_posture.checks.passed` expressions of Gateway policies. |
+| <a name="output_device_subnet_ids"></a> [device\_subnet\_ids](#output\_device\_subnet\_ids) | IDs of the device subnets, by key of `device_subnets`: the `subnet_id` that `device_ip_profiles` takes. |
 <!-- END_TF_DOCS -->
 
 ## Development

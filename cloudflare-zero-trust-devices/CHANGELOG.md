@@ -19,5 +19,8 @@ Releases are tagged `cloudflare-zero-trust-devices/vX.Y.Z`.
 - Outputs `device_custom_profile_ids`, `device_custom_profile_local_domain_fallback_ids` and `device_managed_network_ids`
 - Device posture integrations with `device_posture_integrations`, and device posture rules with `device_posture_rules`
 - Outputs `device_posture_integration_ids` and `device_posture_rule_ids`
+- Device subnets with `device_subnets`, created before the subnet they replace, and device IP profiles with `device_ip_profiles`
+- Deployment groups with `device_deployment_groups`
+- Outputs `device_subnet_ids`, `device_ip_profile_ids`, `device_deployment_group_ids` and `device_default_profile_policy_id`
 
 [Unreleased]: https://github.com/theobs-digital/cloudflare-terraform-modules/commits/main/cloudflare-zero-trust-devices

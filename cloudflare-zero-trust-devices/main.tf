@@ -137,3 +137,40 @@ resource "cloudflare_zero_trust_device_posture_rule" "this" {
   match       = each.value.match
   schedule    = each.value.schedule
 }
+
+resource "cloudflare_zero_trust_device_subnet" "this" {
+  for_each = var.device_subnets
+
+  account_id         = var.account_id
+  name               = each.value.name
+  network            = each.value.network
+  comment            = each.value.comment
+  is_default_network = each.value.is_default_network
+
+  # Cloudflare refuses to delete a subnet that an IP profile references
+  # (error 1121): move the profiles to the new subnet before deleting the old.
+  lifecycle {
+    create_before_destroy = true
+  }
+}
+
+resource "cloudflare_zero_trust_device_ip_profile" "this" {
+  for_each = var.device_ip_profiles
+
+  account_id  = var.account_id
+  name        = each.value.name
+  match       = each.value.match
+  precedence  = each.value.precedence
+  subnet_id   = each.value.subnet_id
+  description = each.value.description
+  enabled     = each.value.enabled
+}
+
+resource "cloudflare_zero_trust_device_deployment_groups" "this" {
+  for_each = var.device_deployment_groups
+
+  account_id     = var.account_id
+  name           = each.value.name
+  version_config = each.value.version_config
+  policy_ids     = each.value.policy_ids
+}
