@@ -29,7 +29,7 @@ permissions:
 
 | Permission | Operations |
 |---|---|
-| Account → Zero Trust → Edit | device settings, default and custom profiles, their local domain fallbacks, managed networks |
+| Account → Zero Trust → Edit | device settings, default and custom profiles, their local domain fallbacks, managed networks, posture integrations and rules |
 | Zone → SSL and Certificates → Edit | `device_default_profile_certificates`, on each zone it lists |
 
 ## Settings
@@ -391,6 +391,158 @@ Adopt an existing network with an `import` block, whose ID is
 `<account_id>/<network_id>`. Removing an entry deletes the network in
 Cloudflare.
 
+## Device posture integrations
+
+`device_posture_integrations` connects the organization to a third-party
+service, whose verdict on each device a posture rule of the same type checks:
+`crowdstrike_s2s`, `intune`, `kolide`, `sentinelone_s2s`, `tanium_s2s`,
+`uptycs`, `workspace_one`, or `custom_s2s` for a service of your own.
+`interval` sets how often Cloudflare polls the service, such as `10m` or
+`12h`, and `config` takes the fields that the service needs.
+
+```hcl
+variable "posture_access_client_secret" {
+  type      = string
+  sensitive = true
+}
+
+module "devices" {
+  # ...
+
+  device_posture_integrations = {
+    posture_service = {
+      name     = "Posture service"
+      type     = "custom_s2s"
+      interval = "10m"
+      config = {
+        api_url              = "https://posture.example/devices"
+        access_client_id     = "88bf3b6d86161464f6509f7219099e57.access"
+        access_client_secret = var.posture_access_client_secret
+      }
+    }
+  }
+}
+```
+
+Cloudflare checks the credentials when it creates the integration, and
+creates nothing if the check fails. On 17 and 18 October 2026, made-up
+CrowdStrike credentials failed with `Testing your CrowdStrike credentials
+failed. CrowdStrike API returned an unexpected status code of 401` (error
+2046). A `custom_s2s` integration failed with `invalid Access client ID`
+for a made-up service token, and, with a real one, with `issue with api_url:
+POST https://… could not lookup IP` for a URL that does not resolve:
+Cloudflare calls `api_url` to create the integration, so the service must
+answer first. The apply stops on the error, and neither Cloudflare nor the
+state holds an integration. Integrations are therefore tested with a mock
+provider only.
+
+The provider marks `config.client_secret`, `config.client_key` and
+`config.access_client_secret` sensitive, so the plan hides them even when
+written literally. Pass them from a sensitive variable or a secret store,
+never written in a versioned `.tf` file, and leave the map itself unmarked:
+Terraform refuses `for_each` over a sensitive value (`Invalid for_each
+argument`), so `sensitive()` around the whole map fails, while a sensitive
+value inside it keeps its mark. The state holds the secrets in clear text, as
+it does any attribute: protect the state backend.
+
+The provider never reads `client_secret`, `client_key`, `customer_id`,
+`access_client_id` and `access_client_secret` back from Cloudflare (provider
+code, 5.28.0): a change made in the dashboard does not show in the plan, and
+after an `import`, whose ID is `<account_id>/<integration_id>`, the first
+plan shows them as an update, which sends them again. Removing an entry
+deletes the integration in Cloudflare.
+
+`device_posture_integration_ids` gives the ID of each integration, by key,
+for `input.connection_id` of the rules that check it.
+
+## Device posture rules
+
+`device_posture_rules` declares the checks that Access and Gateway policies
+can require of a device. `type` chooses the check, among the 23 that the
+provider lists; `input` takes its fields, `match` the platforms it runs on,
+and `schedule` how often the WARP client runs it.
+
+```hcl
+  device_posture_rules = {
+    macos_version = {
+      name     = "macOS 15 or later"
+      type     = "os_version"
+      schedule = "5m"
+      match    = [{ platform = "mac" }]
+      input    = { version = "15.0.0", operator = ">=" }
+    }
+    disk_encryption = {
+      name     = "Disk encryption"
+      type     = "disk_encryption"
+      schedule = "5m"
+      match    = [{ platform = "mac" }, { platform = "windows" }]
+      input    = { require_all = true, check_disks = [] }
+    }
+    posture_score = {
+      name     = "Posture score of 70 or more"
+      type     = "custom_s2s"
+      schedule = "5m"
+      input = {
+        connection_id = module.devices.device_posture_integration_ids["posture_service"]
+        score         = 70
+        operator      = ">="
+      }
+    }
+  }
+```
+
+A rule that checks an integration takes its ID in `input.connection_id`, from
+the `device_posture_integration_ids` output. A `serial_number` rule takes, in
+`input.id`, the ID of a Gateway list of type `SERIAL`, from the `list_ids`
+output of the `cloudflare-zero-trust-gateway` module. A
+`client_certificate_v2` rule takes, in `input.certificate_id`, the ID of a
+`cloudflare_mtls_certificate` that holds the CA; its `cn` and
+`subject_alternative_names` accept the `${serial_number}` and `${hostname}`
+variables of the WARP client, which HCL needs written `$${serial_number}`,
+or Terraform reads them as its own interpolation.
+
+On 18 October 2026, the module created and imported, with no change
+afterwards, rules of the types `os_version` (macOS, Windows, Linux),
+`firewall`, `disk_encryption`, `file`, `application`, `domain_joined`,
+`warp`, `gateway`, `serial_number` and `client_certificate_v2`. The rules
+that check an integration are tested with a mock provider only, as are their
+integrations. These rules showed what follows.
+
+Leave `input.operating_system` out. Cloudflare's API reference marks it
+required for several types, but Cloudflare created an `os_version` rule
+without it, and accepted rules of every type above without it. Written, it is
+dropped: Cloudflare never returns it, and each plan shows it again as an
+update, which the apply does not settle. `match` chooses the platforms.
+
+Write `schedule`, as `5m` for Cloudflare's default. Cloudflare sets `5m`
+when it is left out: the provider hides that value from the plan of a rule it
+created, but an imported rule plans `schedule = "5m" -> null` until
+`schedule` is written. `serial_number` and `application` rules are the
+reverse: the provider drops `5m` at import, so the first plan shows a written
+`schedule = "5m"` as an update, which changes nothing in Cloudflare. In the
+same way, Cloudflare returns `check_disks = []` for a `disk_encryption` rule
+without disks: write it so, or an imported rule plans `[] -> null`.
+
+Each apply sends the whole rule, so a field removed from the configuration is
+removed in Cloudflare: removing `expiration` cleared it. `description` is the
+exception: the provider keeps the last value when it is left out, so
+removing it changes nothing, in the plan or in Cloudflare. Write
+`description = ""` to clear it.
+
+Creating a Gateway list of type `SERIAL` also made Cloudflare create a
+`serial_number` rule of the same ID and name as the list, outside Terraform;
+deleting the list removed it. An organization may also hold rules named `WARP` and `Gateway`, of
+the types `warp` and `gateway`, without input: the module imported both with
+no change.
+
+Adopt an existing rule with an `import` block, whose ID is
+`<account_id>/<rule_id>`, and write the values that the plan shows changing.
+Removing an entry deletes the rule in Cloudflare.
+
+`device_posture_rule_ids` gives the ID of each rule, by key, for the
+`device_posture` rules of Access groups and policies, and the
+`device_posture.checks.passed` expressions of Gateway policies.
+
 <!-- BEGIN_TF_DOCS -->
 ## Requirements
 
@@ -415,6 +567,8 @@ Cloudflare.
 | [cloudflare_zero_trust_device_default_profile_certificates.this](https://registry.terraform.io/providers/cloudflare/cloudflare/latest/docs/resources/zero_trust_device_default_profile_certificates) | resource |
 | [cloudflare_zero_trust_device_default_profile_local_domain_fallback.this](https://registry.terraform.io/providers/cloudflare/cloudflare/latest/docs/resources/zero_trust_device_default_profile_local_domain_fallback) | resource |
 | [cloudflare_zero_trust_device_managed_networks.this](https://registry.terraform.io/providers/cloudflare/cloudflare/latest/docs/resources/zero_trust_device_managed_networks) | resource |
+| [cloudflare_zero_trust_device_posture_integration.this](https://registry.terraform.io/providers/cloudflare/cloudflare/latest/docs/resources/zero_trust_device_posture_integration) | resource |
+| [cloudflare_zero_trust_device_posture_rule.this](https://registry.terraform.io/providers/cloudflare/cloudflare/latest/docs/resources/zero_trust_device_posture_rule) | resource |
 | [cloudflare_zero_trust_device_settings.this](https://registry.terraform.io/providers/cloudflare/cloudflare/latest/docs/resources/zero_trust_device_settings) | resource |
 
 ## Inputs
@@ -428,6 +582,8 @@ Cloudflare.
 | <a name="input_device_default_profile_certificates"></a> [device\_default\_profile\_certificates](#input\_device\_default\_profile\_certificates) | Device client certificates, one entry per zone, by a key of your choice, with the attributes of `cloudflare_zero_trust_device_default_profile_certificates` under the same names. Removing an entry changes nothing in Cloudflare: apply `enabled = false` first to turn the certificate off, see [Device certificates](#device-certificates). | <pre>map(object({<br/>    enabled = bool<br/>    zone_id = string<br/>  }))</pre> | `{}` | no |
 | <a name="input_device_default_profile_local_domain_fallback"></a> [device\_default\_profile\_local\_domain\_fallback](#input\_device\_default\_profile\_local\_domain\_fallback) | Local domain fallback of the default profile, with the attributes of `cloudflare_zero_trust_device_default_profile_local_domain_fallback` under the same names. When `null`, the module leaves it alone. `domains` replaces the whole list, Cloudflare's default domains included. Removing this argument changes nothing in Cloudflare, see [Local domain fallback](#local-domain-fallback). | <pre>object({<br/>    domains = set(object({<br/>      suffix      = string<br/>      description = optional(string)<br/>      dns_server  = optional(list(string))<br/>    }))<br/>  })</pre> | `null` | no |
 | <a name="input_device_managed_networks"></a> [device\_managed\_networks](#input\_device\_managed\_networks) | Managed networks, by a key of your choice, with the attributes of `cloudflare_zero_trust_device_managed_networks` under the same names. `config.sha256` defaults to `""`, which Cloudflare returns for a network without fingerprint. Custom profiles match a network by its `name`, which Cloudflare does not check, see [Managed networks](#managed-networks). | <pre>map(object({<br/>    config = object({<br/>      tls_sockaddr = string<br/>      sha256       = optional(string, "")<br/>    })<br/>    name = string<br/>    type = string<br/>  }))</pre> | `{}` | no |
+| <a name="input_device_posture_integrations"></a> [device\_posture\_integrations](#input\_device\_posture\_integrations) | Device posture integrations with third-party providers, by a key of your choice, with the attributes of `cloudflare_zero_trust_device_posture_integration` under the same names. Cloudflare checks the credentials with the provider when it creates the integration, and creates nothing if they fail (error 2046). Pass `config.client_secret`, `config.client_key` and `config.access_client_secret` from sensitive variables, without marking the map sensitive, see [Device posture integrations](#device-posture-integrations). | <pre>map(object({<br/>    config = object({<br/>      access_client_id     = optional(string)<br/>      access_client_secret = optional(string)<br/>      api_url              = optional(string)<br/>      auth_url             = optional(string)<br/>      client_id            = optional(string)<br/>      client_key           = optional(string)<br/>      client_secret        = optional(string)<br/>      customer_id          = optional(string)<br/>    })<br/>    interval = string<br/>    name     = string<br/>    type     = string<br/>  }))</pre> | `{}` | no |
+| <a name="input_device_posture_rules"></a> [device\_posture\_rules](#input\_device\_posture\_rules) | Device posture rules, by a key of your choice, with the attributes of `cloudflare_zero_trust_device_posture_rule` under the same names. `input` takes the fields of the rule `type`; take `input.connection_id` from the `device_posture_integration_ids` output. Leave `input.operating_system` out: Cloudflare drops it, and each plan shows it again. Write `schedule`, `5m` by default, or an imported rule plans a change. Removing `description` keeps it in Cloudflare, see [Device posture rules](#device-posture-rules). | <pre>map(object({<br/>    type        = string<br/>    description = optional(string)<br/>    expiration  = optional(string)<br/>    input = optional(object({<br/>      active_threats     = optional(number)<br/>      auth_state         = optional(list(string))<br/>      certificate_id     = optional(string)<br/>      check_disks        = optional(list(string))<br/>      check_private_key  = optional(bool)<br/>      cn                 = optional(string)<br/>      compliance_status  = optional(string)<br/>      connection_id      = optional(string)<br/>      count_operator     = optional(string)<br/>      domain             = optional(string)<br/>      eid_last_seen      = optional(string)<br/>      enabled            = optional(bool)<br/>      exists             = optional(bool)<br/>      extended_key_usage = optional(list(string))<br/>      id                 = optional(string)<br/>      infected           = optional(bool)<br/>      is_active          = optional(bool)<br/>      issue_count        = optional(string)<br/>      last_seen          = optional(string)<br/>      locations = optional(object({<br/>        paths        = optional(list(string))<br/>        trust_stores = optional(list(string))<br/>      }))<br/>      network_status            = optional(string)<br/>      operating_system          = optional(string)<br/>      operational_state         = optional(string)<br/>      operator                  = optional(string)<br/>      os                        = optional(string)<br/>      os_distro_name            = optional(string)<br/>      os_distro_revision        = optional(string)<br/>      os_version_extra          = optional(string)<br/>      overall                   = optional(string)<br/>      path                      = optional(string)<br/>      require_all               = optional(bool)<br/>      risk_level                = optional(string)<br/>      score                     = optional(number)<br/>      score_operator            = optional(string)<br/>      sensor_config             = optional(string)<br/>      sha256                    = optional(string)<br/>      state                     = optional(string)<br/>      subject_alternative_names = optional(list(string))<br/>      thumbprint                = optional(string)<br/>      total_score               = optional(number)<br/>      update_window_days        = optional(number)<br/>      version                   = optional(string)<br/>      version_operator          = optional(string)<br/>    }))<br/>    match = optional(list(object({<br/>      platform = optional(string)<br/>    })))<br/>    name     = optional(string)<br/>    schedule = optional(string)<br/>  }))</pre> | `{}` | no |
 | <a name="input_device_settings"></a> [device\_settings](#input\_device\_settings) | Device settings of the account, with the attributes of `cloudflare_zero_trust_device_settings` under the same names. When `null`, the module leaves them alone. Write every field Cloudflare returns: one left out shows as a change to `null` at each plan, which Cloudflare refuses (error 2024). Removing this argument resets the settings, see [Settings](#settings). | <pre>object({<br/>    disable_for_time                      = optional(number)<br/>    external_emergency_signal_enabled     = optional(bool)<br/>    external_emergency_signal_fingerprint = optional(string)<br/>    external_emergency_signal_interval    = optional(string)<br/>    external_emergency_signal_url         = optional(string)<br/>    gateway_proxy_enabled                 = optional(bool)<br/>    gateway_udp_proxy_enabled             = optional(bool)<br/>    root_certificate_installation_enabled = optional(bool)<br/>    use_zt_virtual_ip                     = optional(bool)<br/>  })</pre> | `null` | no |
 
 ## Outputs
@@ -437,6 +593,8 @@ Cloudflare.
 | <a name="output_device_custom_profile_ids"></a> [device\_custom\_profile\_ids](#output\_device\_custom\_profile\_ids) | IDs of the custom profiles, by key of `device_custom_profiles`: the `policy_id` that `device_custom_profile_local_domain_fallbacks` takes. |
 | <a name="output_device_custom_profile_local_domain_fallback_ids"></a> [device\_custom\_profile\_local\_domain\_fallback\_ids](#output\_device\_custom\_profile\_local\_domain\_fallback\_ids) | IDs of the local domain fallbacks of custom profiles, by key of `device_custom_profile_local_domain_fallbacks`. Each one is the ID of its profile. |
 | <a name="output_device_managed_network_ids"></a> [device\_managed\_network\_ids](#output\_device\_managed\_network\_ids) | IDs of the managed networks, by key of `device_managed_networks`. |
+| <a name="output_device_posture_integration_ids"></a> [device\_posture\_integration\_ids](#output\_device\_posture\_integration\_ids) | IDs of the device posture integrations, by key of `device_posture_integrations`: the `input.connection_id` of a rule that checks a third-party provider. |
+| <a name="output_device_posture_rule_ids"></a> [device\_posture\_rule\_ids](#output\_device\_posture\_rule\_ids) | IDs of the device posture rules, by key of `device_posture_rules`, for the `device_posture` rules of Access groups and policies and the `device_posture.checks.passed` expressions of Gateway policies. |
 <!-- END_TF_DOCS -->
 
 ## Development

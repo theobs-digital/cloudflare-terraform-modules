@@ -114,3 +114,26 @@ resource "cloudflare_zero_trust_device_managed_networks" "this" {
   type       = each.value.type
   config     = each.value.config
 }
+
+resource "cloudflare_zero_trust_device_posture_integration" "this" {
+  for_each = var.device_posture_integrations
+
+  account_id = var.account_id
+  name       = each.value.name
+  type       = each.value.type
+  interval   = each.value.interval
+  config     = each.value.config
+}
+
+resource "cloudflare_zero_trust_device_posture_rule" "this" {
+  for_each = var.device_posture_rules
+
+  account_id  = var.account_id
+  name        = each.value.name
+  type        = each.value.type
+  description = each.value.description
+  expiration  = each.value.expiration
+  input       = each.value.input
+  match       = each.value.match
+  schedule    = each.value.schedule
+}

@@ -17,5 +17,7 @@ Releases are tagged `cloudflare-zero-trust-devices/vX.Y.Z`.
 - Custom profiles with `device_custom_profiles`, and their local domain fallbacks with `device_custom_profile_local_domain_fallbacks`, updated after the profiles
 - Managed networks with `device_managed_networks`, with an empty `config.sha256` by default
 - Outputs `device_custom_profile_ids`, `device_custom_profile_local_domain_fallback_ids` and `device_managed_network_ids`
+- Device posture integrations with `device_posture_integrations`, and device posture rules with `device_posture_rules`
+- Outputs `device_posture_integration_ids` and `device_posture_rule_ids`
 
 [Unreleased]: https://github.com/theobs-digital/cloudflare-terraform-modules/commits/main/cloudflare-zero-trust-devices
