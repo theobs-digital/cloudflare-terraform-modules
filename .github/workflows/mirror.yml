@@ -1,0 +1,93 @@
+# Publishes a module release to <owner>/terraform-<module>: the Terraform
+# Registry needs one repository per module, with the module at its root and
+# tags such as v1.2.0. One commit per release, never overwritten. Called by
+# each module's mirror-<module>.yml, with that mirror's deploy key.
+name: Mirror
+
+on:
+  workflow_call:
+    inputs:
+      module:
+        description: Module folder, such as cloudflare-dns
+        type: string
+        required: true
+      tag:
+        description: Release tag, such as cloudflare-dns/v1.2.0
+        type: string
+        required: true
+    secrets:
+      deploy_key:
+        description: Private deploy key with write access to the mirror only
+        required: true
+
+# Narrows whatever the caller's token holds.
+permissions:
+  contents: read
+
+jobs:
+  mirror:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    concurrency: mirror-${{ inputs.module }}
+    env:
+      TAG: ${{ inputs.tag }}
+      MODULE: ${{ inputs.module }}
+      MIRROR: git@github.com:${{ github.repository_owner }}/terraform-${{ inputs.module }}.git
+      MONOREPO: https://github.com/${{ github.repository }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.tag }}
+          path: monorepo
+          persist-credentials: false
+
+      # GitHub's host key comes from https://api.github.com/meta, not from
+      # ssh-keyscan.
+      - name: Load the deploy key
+        env:
+          DEPLOY_KEY: ${{ secrets.deploy_key }}
+        run: |
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$DEPLOY_KEY" > ~/.ssh/mirror_key
+          chmod 600 ~/.ssh/mirror_key
+          echo "github.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl" > ~/.ssh/known_hosts
+          echo "GIT_SSH_COMMAND=ssh -i $HOME/.ssh/mirror_key -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes" >> "$GITHUB_ENV"
+
+      - name: Publish the release to the mirror
+        run: |
+          [[ $TAG =~ ^$MODULE/v[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "Not a release tag of $MODULE: $TAG"; exit 1; }
+          version=${TAG#"$MODULE"/}
+          # Build on main, whatever the mirror's default branch. Empty on the
+          # first release only.
+          git clone -q --branch main "$MIRROR" mirror 2> /dev/null || git clone -q "$MIRROR" mirror
+          if git -C mirror rev-parse -q --verify "refs/tags/$version" > /dev/null; then
+            echo "$version is already in the mirror"
+            exit 1
+          fi
+
+          find mirror -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} +
+          cp -a "monorepo/$MODULE/." mirror/
+          cp monorepo/LICENSE mirror/
+
+          # Links out of the module folder lead to the monorepo, at the same
+          # tag. The examples' ../../README.md is the module README here too.
+          sed -i -e 's|](\.\./LICENSE)|](LICENSE)|g' -e "s|](\.\./|]($MONOREPO/blob/$TAG/|g" mirror/README.md
+          {
+            head -n 1 mirror/README.md
+            echo
+            echo "> Published from [\`$MODULE\`]($MONOREPO/tree/$TAG/$MODULE) in [${MONOREPO##*/}]($MONOREPO), where issues and pull requests go."
+            tail -n +2 mirror/README.md
+          } > README.md.new
+          mv README.md.new mirror/README.md
+
+          cd mirror
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -q -m "$MODULE $version, from $MONOREPO/releases/tag/$TAG"
+          git tag -a "$version" -m "$MODULE $version"
+          git push -q origin HEAD:main "$version"
+          echo "Published $version: $(git rev-parse --short HEAD)"
