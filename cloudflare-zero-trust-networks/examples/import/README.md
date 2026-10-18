@@ -21,7 +21,9 @@ This example needs Terraform 1.7 or later, for `for_each` in `import` blocks.
 2. Give the IDs of the WARP Connectors, from **Networking** > **Mesh** in the
    dashboard, in `warp_connector_ids`. Provider 5.28.0 cannot look them up:
    its data sources of WARP Connectors fail with `RFC3339 string value is
-   null`, whatever the filter.
+   null`, and return no connector that never connected when the filters
+   avoid the error (provider issue
+   [#7417](https://github.com/cloudflare/terraform-provider-cloudflare/issues/7417)).
 
 3. Plan, and read it:
 
