@@ -11,6 +11,7 @@ keeps its attribute names, so whoever knows the provider knows the module.
 |---|---|---|---|
 | [`cloudflare-dns`](cloudflare-dns) | A DNS zone: the zone, its records, its DNS settings and DNSSEC | [`theobs-digital/dns/cloudflare`](https://registry.terraform.io/modules/theobs-digital/dns/cloudflare) | [`cloudflare-dns/v1.2.1`](cloudflare-dns/CHANGELOG.md) |
 | [`cloudflare-zero-trust-access`](cloudflare-zero-trust-access) | Cloudflare Access: the Zero Trust organization, identity providers, groups and reusable policies, applications, service tokens, mTLS and short-lived certificates, tags, custom pages, key rotation, infrastructure targets, MCP servers and portals | not published | [`cloudflare-zero-trust-access/v1.0.0`](cloudflare-zero-trust-access/CHANGELOG.md) |
+| [`cloudflare-zero-trust-networks`](cloudflare-zero-trust-networks) | Zero Trust private networks: Cloudflare Tunnels and their configuration, WARP Connectors (Mesh nodes) and their HA configuration, virtual networks, CIDR and hostname routes, connectivity settings | not published | [`cloudflare-zero-trust-networks/v1.0.0`](cloudflare-zero-trust-networks/CHANGELOG.md) |
 
 ## Usage
 
@@ -90,11 +91,12 @@ terraform -chdir=cloudflare-dns test
 
 The [Checks](.github/workflows/checks.yml) workflow runs the same hooks, then
 the tests of every module, on each pull request and each push to `main`, with
-the tool versions listed above. Two more jobs validate each module with the
+the tool versions listed above. Three more jobs validate each module with the
 bottom of its requirements: `cloudflare-dns` with Terraform 1.3.10 and
-provider 5.27.0, `cloudflare-zero-trust-access` with Terraform 1.3.10 and
-provider 5.28.0. The branch protection of `main` lists the jobs a pull
-request must pass before it is merged.
+provider 5.27.0, `cloudflare-zero-trust-access` and
+`cloudflare-zero-trust-networks` with Terraform 1.3.10 and provider 5.28.0.
+The branch protection of `main` lists the jobs a pull request must pass
+before it is merged.
 
 These tests mock the provider, so they cannot see what Cloudflare does with
 a value. A module can also hold tests against the real API, in `tests-real`,
@@ -124,24 +126,42 @@ terraform plan -detailed-exitcode -var account_id=... -var zone=example.com
 terraform destroy -var account_id=... -var zone=example.com
 ```
 
+`cloudflare-zero-trust-networks/tests-real` works the same way, on the same
+account: the tunnels, virtual networks and WARP Connectors are named
+`tf-test-ci-*`, the routes take `10.252.0.0/16` and `fd00:252::/48`, and the
+connectivity settings of the account are left alone. Cloudflare never returns
+the secret of the test tunnel: pass the same one to each command.
+
+```bash
+export CLOUDFLARE_API_TOKEN=...
+export TF_VAR_tunnel_secret="$(openssl rand -base64 32)"
+cd cloudflare-zero-trust-networks/tests-real
+terraform init
+terraform apply -var account_id=... -var zone=example.com
+terraform plan -detailed-exitcode -var account_id=... -var zone=example.com
+terraform destroy -var account_id=... -var zone=example.com
+```
+
 The [Real API tests](.github/workflows/tests-real.yml) workflow runs them
 every day with the newest provider 5.x, and on demand from the Actions tab.
-For `cloudflare-zero-trust-access`, a second plan with a change fails the
-run: that is a provider that drifts from what it applied. It reads these
-repository secrets:
+For the Zero Trust modules, a second plan with a change fails the run: that
+is a provider that drifts from what it applied. It reads these repository
+secrets:
 
 | Secret | Value |
 |---|---|
 | `CLOUDFLARE_API_TOKEN` | a token for the test zone only: Zone → DNS → Edit and Zone → Zone → Read |
 | `TEST_ZONE` | the name of the test zone |
 | `TEST_ACCOUNT_ID` | the ID of its account |
-| `ZERO_TRUST_TEST_API_TOKEN` | a token for the Zero Trust test account only, with the permissions in the [Quick start](cloudflare-zero-trust-access/README.md#quick-start) of `cloudflare-zero-trust-access` |
+| `ZERO_TRUST_TEST_API_TOKEN` | a token for the Zero Trust test account only, with the permissions in the [Quick start](cloudflare-zero-trust-access/README.md#quick-start) of `cloudflare-zero-trust-access`, plus Cloudflare Tunnel → Edit and Cloudflare One Connector: WARP → Edit for `cloudflare-zero-trust-networks` |
 | `ZERO_TRUST_TEST_ACCOUNT_ID` | the ID of that account |
 | `ZERO_TRUST_TEST_ZONE` | the name of a zone in that account |
 
 Before the tests, the workflow deletes what a run cut short before its
-cleanup leaves behind: `tf-test.<zone>` and every name under it, and the
-Access objects named `tf-test-ci-*`. Keep these names for this workflow only.
+cleanup leaves behind: `tf-test.<zone>` and every name under it, the Access
+objects named `tf-test-ci-*`, and the tunnels, WARP Connectors and virtual
+networks named `tf-test-ci-*` with the routes that use them. Keep these names
+for this workflow only.
 
 ### Release a module
 
