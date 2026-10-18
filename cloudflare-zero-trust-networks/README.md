@@ -721,12 +721,10 @@ this module saw with provider 5.28.0:
 | [#7395](https://github.com/cloudflare/terraform-provider-cloudflare/issues/7395) | Destroying a tunnel configuration leaves its ingress rules live (5.25.0). | The same: removing an entry of `tunnel_cloudflared_configs` sends no request. See [Remote configuration](#remote-configuration). |
 | [#7279](https://github.com/cloudflare/terraform-provider-cloudflare/issues/7279) | Reading a tunnel token fails with 401 with Cloudflare Tunnel → Read only (5.22.0). | The API schema accepts only Edit permissions for a token: see [Quick start](#quick-start). |
 | [#7417](https://github.com/cloudflare/terraform-provider-cloudflare/issues/7417) | The data sources of WARP Connectors, `cloudflare_zero_trust_tunnel_warp_connectors` and `cloudflare_zero_trust_tunnel_warp_connector` with `filter`, fail with `RFC3339 string value is null` unless `was_active_at` and `was_inactive_at` are both set (5.28.0). | Reported from these tests. With both set, Cloudflare only returns the connectors active at `was_active_at`: no data source finds a connector by name. The [import example](examples/import) takes the IDs of WARP Connectors instead. |
+| [#7418](https://github.com/cloudflare/terraform-provider-cloudflare/issues/7418) | Removing an optional attribute sends it as `null`, which Cloudflare refuses: `comment` of a hostname route and a field of `connectivity_settings` (500), the fields of the former mode of an HA configuration (error 1056) (5.28.0). | Reported from these tests: write `comment = ""` and both settings, and switch between `local` and `aws` through `none`. See [Hostname routes](#hostname-routes), [Connectivity settings](#connectivity-settings) and [HA configuration](#ha-configuration). |
 
 The tests also saw these, with no open issue on 18 October 2026:
 
-- `comment` removed from a hostname route, a field removed from
-  `connectivity_settings`, and the fields of the former HA mode are sent as
-  `null`, which Cloudflare refuses.
 - `ha = false` on an HA connector is sent alone, which Cloudflare answers with
   `Tunnel not found`; the provider never reads `ha` back after an import.
 
