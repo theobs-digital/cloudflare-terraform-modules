@@ -177,7 +177,7 @@ variable "device_managed_networks" {
 }
 
 variable "device_posture_integrations" {
-  description = "Device posture integrations with third-party providers, by a key of your choice, with the attributes of `cloudflare_zero_trust_device_posture_integration` under the same names. Cloudflare checks the credentials with the provider when it creates the integration, and creates nothing if they fail (error 2046). Pass `config.client_secret`, `config.client_key` and `config.access_client_secret` from sensitive variables, without marking the map sensitive, see [Device posture integrations](#device-posture-integrations)."
+  description = "Device posture integrations with third-party providers, by a key of your choice, with the attributes of `cloudflare_zero_trust_device_posture_integration` under the same names. Cloudflare checks the credentials with the provider when it creates the integration, and creates nothing if they fail (error 2046). Pass `config.client_secret`, `config.client_key` and `config.access_client_secret` from sensitive variables, without marking the map sensitive, see [Posture integrations](#posture-integrations)."
   type = map(object({
     config = object({
       access_client_id     = optional(string)
@@ -197,7 +197,7 @@ variable "device_posture_integrations" {
 }
 
 variable "device_posture_rules" {
-  description = "Device posture rules, by a key of your choice, with the attributes of `cloudflare_zero_trust_device_posture_rule` under the same names. `input` takes the fields of the rule `type`; take `input.connection_id` from the `device_posture_integration_ids` output. Leave `input.operating_system` out: Cloudflare drops it, and each plan shows it again. Write `schedule`, `5m` by default, or an imported rule plans a change. Removing `description` keeps it in Cloudflare, see [Device posture rules](#device-posture-rules)."
+  description = "Device posture rules, by a key of your choice, with the attributes of `cloudflare_zero_trust_device_posture_rule` under the same names. `input` takes the fields of the rule `type`; take `input.connection_id` from the `device_posture_integration_ids` output. Leave `input.operating_system` out: Cloudflare drops it, and each plan shows it again. Write `schedule`, `5m` by default, or an imported rule plans a change. Removing `description` keeps it in Cloudflare, see [Posture rules](#posture-rules)."
   type = map(object({
     type        = string
     description = optional(string)
@@ -260,7 +260,7 @@ variable "device_posture_rules" {
 }
 
 variable "device_subnets" {
-  description = "Device subnets, from which a device takes its IP, by a key of your choice, with the attributes of `cloudflare_zero_trust_device_subnet` under the same names. Cloudflare refuses to change `network`: declare the new range under a new key, created before the old one is deleted. `is_default_network = true` takes the default from the former default subnet, outside Terraform; Cloudflare refuses `false` on the default subnet. Write `comment` and `is_default_network` of an imported subnet, see [Device IP profiles and subnets](#device-ip-profiles-and-subnets)."
+  description = "Device subnets, from which a device takes its IP, by a key of your choice, with the attributes of `cloudflare_zero_trust_device_subnet` under the same names. Cloudflare refuses to change `network`: declare the new range under a new key, created before the old one is deleted. `is_default_network = true` takes the default from the former default subnet, outside Terraform; Cloudflare refuses `false` on the default subnet. Write `comment` and `is_default_network` of an imported subnet, see [Subnets and IP profiles](#subnets-and-ip-profiles)."
   type = map(object({
     name               = string
     network            = string
@@ -271,7 +271,7 @@ variable "device_subnets" {
 }
 
 variable "device_ip_profiles" {
-  description = "Device IP profiles, which choose the subnet of a device, by a key of your choice, with the attributes of `cloudflare_zero_trust_device_ip_profile` under the same names. Take `subnet_id` from the `device_subnet_ids` output. Cloudflare refuses a `precedence` that another IP profile holds (error 2808). Removing `description` keeps it in Cloudflare: write `\"\"` to clear it, see [Device IP profiles and subnets](#device-ip-profiles-and-subnets)."
+  description = "Device IP profiles, which choose the subnet of a device, by a key of your choice, with the attributes of `cloudflare_zero_trust_device_ip_profile` under the same names. Take `subnet_id` from the `device_subnet_ids` output. Cloudflare refuses a `precedence` that another IP profile holds (error 2808). Removing `description` keeps it in Cloudflare: write `\"\"` to clear it, see [Subnets and IP profiles](#subnets-and-ip-profiles)."
   type = map(object({
     match       = string
     name        = string
