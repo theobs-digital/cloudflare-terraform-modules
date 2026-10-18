@@ -123,3 +123,62 @@ jobs:
       - name: Destroy what the run created
         if: always()
         run: terraform destroy -auto-approve -input=false
+
+  # The same for cloudflare-zero-trust-devices, on the same test account.
+  cloudflare-zero-trust-devices:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: bash
+        working-directory: cloudflare-zero-trust-devices/tests-real
+    # Secrets rather than variables: GitHub masks them in the public logs.
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.ZERO_TRUST_TEST_API_TOKEN }}
+      TF_VAR_account_id: ${{ secrets.ZERO_TRUST_TEST_ACCOUNT_ID }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
+        with:
+          terraform_version: 1.16.5
+          terraform_wrapper: false
+
+      - run: terraform init -input=false
+
+      # A run cut short leaves its objects behind, and the next one would fail
+      # on them: delete what is named tf-test-ci-*, nothing else. Users of an
+      # object go before it: Cloudflare refuses to delete a subnet that an IP
+      # profile uses.
+      - name: Delete device objects left under tf-test-ci
+        run: |
+          api="https://api.cloudflare.com/client/v4/accounts/$TF_VAR_account_id"
+          auth="Authorization: Bearer $CLOUDFLARE_API_TOKEN"
+          # The IDs, or the second argument, of the objects of a list whose
+          # name starts with tf-test-ci-.
+          ids() {
+            curl -sSf -H "$auth" "$api/$1" |
+              jq -r --arg out "${2:-id}" '.result[]? | select((.name // "") | startswith("tf-test-ci-")) | .[$out]'
+          }
+          delete() {
+            echo "Deleting $1"
+            curl -sSf -X DELETE -H "$auth" "$api/$1" > /dev/null
+          }
+          for id in $(ids devices/deployment-groups); do delete "devices/deployment-groups/$id"; done
+          for id in $(ids devices/ip-profiles); do delete "devices/ip-profiles/$id"; done
+          for id in $(ids zerotrust/subnets); do delete "zerotrust/subnets/warp/$id"; done
+          for id in $(ids devices/posture); do delete "devices/posture/$id"; done
+          for id in $(ids devices/policies policy_id); do delete "devices/policy/$id"; done
+          for id in $(ids devices/networks network_id); do delete "devices/networks/$id"; done
+          for id in $(ids gateway/lists); do delete "gateway/lists/$id"; done
+
+      - run: terraform apply -auto-approve -input=false
+
+      # Exit code 2: the plan has a change.
+      - run: terraform plan -detailed-exitcode -input=false
+
+      - name: Destroy what the run created
+        if: always()
+        run: terraform destroy -auto-approve -input=false
