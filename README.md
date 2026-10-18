@@ -11,6 +11,7 @@ keeps its attribute names, so whoever knows the provider knows the module.
 |---|---|---|---|
 | [`cloudflare-dns`](cloudflare-dns) | A DNS zone: the zone, its records, its DNS settings and DNSSEC | [`theobs-digital/dns/cloudflare`](https://registry.terraform.io/modules/theobs-digital/dns/cloudflare) | [`cloudflare-dns/v1.2.1`](cloudflare-dns/CHANGELOG.md) |
 | [`cloudflare-zero-trust-access`](cloudflare-zero-trust-access) | Cloudflare Access: the Zero Trust organization, identity providers, groups and reusable policies, applications, service tokens, mTLS and short-lived certificates, tags, custom pages, key rotation, infrastructure targets, MCP servers and portals | not published | [`cloudflare-zero-trust-access/v1.0.0`](cloudflare-zero-trust-access/CHANGELOG.md) |
+| [`cloudflare-zero-trust-devices`](cloudflare-zero-trust-devices) | Zero Trust devices: WARP client settings, default and custom device profiles with their local domain fallback, device certificates, managed networks, posture integrations and rules, device IP subnets and profiles, client deployment groups | not published | [`cloudflare-zero-trust-devices/v1.0.0`](cloudflare-zero-trust-devices/CHANGELOG.md) |
 
 ## Usage
 
